@@ -137,6 +137,9 @@ h2 .lt{opacity:.55}
 .area:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(15,23,42,.07)}
 .area b{font-size:40px;font-weight:800;letter-spacing:-.055em;display:block;margin-bottom:2px}
 .area span{color:var(--sub);font-size:16px}
+.area{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:40px 30px 40px 36px}
+.area img{width:130px;height:130px;mix-blend-mode:multiply;flex-shrink:0;transition:transform .4s}
+.area:hover img{transform:scale(1.06) rotate(-2deg)}
 .gu{margin-top:36px;color:#a3aeb8;font-size:13px;line-height:1.9;text-align:center}
 /* items */
 .items-sec{background:var(--bg)}
@@ -299,9 +302,9 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
    <h2 class="rv"><span class="lt">서울 · 일산 · 김포,</span><br><span class="mk">집 앞까지</span> <span class="bd">찾아가요</span></h2>
    <p class="lead rv">들고 나오실 필요 없어요.</p>
    <div class="areas">
-    <div class="area rv"><b>서울</b><span>서울 전 지역</span></div>
-    <div class="area rv d1"><b>일산</b><span>고양시 일산동구 · 일산서구</span></div>
-    <div class="area rv d2"><b>김포</b><span>김포시 전 지역</span></div>
+    <div class="area rv"><div><b>서울</b><span>서울 전 지역</span></div><img src="assets/img/area-seoul.webp" alt="서울 헌옷수거 지역" width="360" height="360"></div>
+    <div class="area rv d1"><div><b>일산</b><span>일산동구 · 일산서구</span></div><img src="assets/img/area-ilsan.webp" alt="일산 헌옷수거 지역" width="360" height="360"></div>
+    <div class="area rv d2"><div><b>김포</b><span>김포시 전 지역</span></div><img src="assets/img/area-gimpo.webp" alt="김포 헌옷수거 지역" width="360" height="360"></div>
    </div>
    <p class="gu">강남구 · 강동구 · 강북구 · 강서구 · 관악구 · 광진구 · 구로구 · 금천구 · 노원구 · 도봉구 · 동대문구 · 동작구 · 마포구 · 서대문구 · 서초구 · 성동구 · 성북구 · 송파구 · 양천구 · 영등포구 · 용산구 · 은평구 · 종로구 · 중구 · 중랑구 헌옷수거</p>
   </div>
