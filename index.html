@@ -52,8 +52,16 @@ header.solid nav{color:#475569}
 header.solid nav a:hover{color:var(--ink)}
 header.solid .logo .lt-logo{display:none}
 header.solid .logo .dk{display:block}
-.btn-kakao{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--kakao);color:#191919;font-weight:700;border-radius:999px;padding:16px 30px;font-size:17px;transition:transform .2s,box-shadow .2s;white-space:nowrap}
-.btn-kakao:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(254,229,0,.35)}
+.btn-kakao{display:inline-flex;align-items:center;justify-content:center;gap:9px;background:linear-gradient(135deg,#3dbb1c 0%,#2f9a14 55%,#1f7d3a 100%);color:#fff;font-weight:700;border-radius:999px;padding:16px 30px;font-size:17px;letter-spacing:-.02em;box-shadow:0 8px 22px rgba(47,154,20,.28),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .2s,box-shadow .2s,filter .2s;white-space:nowrap}
+.btn-kakao:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:0 14px 30px rgba(47,154,20,.35),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn-kakao span::after{content:"→";display:inline-block;margin-left:8px;transition:transform .2s}
+.btn-kakao:hover span::after{transform:translateX(3px)}
+.btn-sm span::after{display:none}
+.on-dark .btn-kakao{background:#fff;color:var(--navy);box-shadow:0 8px 22px rgba(0,0,0,.25)}
+.on-dark .btn-kakao svg{color:var(--green)}
+.band .btn-kakao{background:#fff;color:#1f7d3a;box-shadow:0 10px 26px rgba(0,0,0,.15)}
+header:not(.solid) .btn-kakao{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);box-shadow:none;backdrop-filter:blur(6px)}
+.fixed .btn-kakao{border:1px solid rgba(255,255,255,.25)}
 .btn-kakao svg{width:20px;height:20px;flex-shrink:0}
 .btn-sm{padding:9px 16px;font-size:14px}
 .btn-sm svg{width:16px;height:16px}
@@ -179,7 +187,7 @@ footer .copy{margin-top:48px;font-size:13px;color:#64748b}
 footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
 /* fixed */
 .fixed{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(14px + env(safe-area-inset-bottom));z-index:30;pointer-events:none}
-.fixed .btn-kakao{pointer-events:auto;width:100%;max-width:440px;display:flex;margin:0 auto;font-size:17px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
+.fixed .btn-kakao{pointer-events:auto;width:100%;max-width:440px;display:flex;margin:0 auto;font-size:17px;box-shadow:0 12px 30px rgba(15,60,20,.35)}
 @media(max-width:860px){
  header nav{display:none}
  header .logo img{height:28px}
@@ -224,7 +232,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
  <div class="wrap">
   <a class="logo" href="#top" aria-label="이수다 홈"><img class="lt-logo" src="assets/logo-white.png" alt="이수다" width="600" height="211"><img class="dk" src="assets/logo.png" alt="이수다" width="600" height="211"></a>
   <nav><a href="#how">이용 방법</a><a href="#price">매입 기준</a><a href="#area">수거 지역</a><a href="#items">수거 품목</a><a href="#faq">자주 묻는 질문</a></nav>
-  <a class="btn-kakao btn-sm" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="header"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#191919" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡 신청</span></a>
+  <a class="btn-kakao btn-sm" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="header"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡 간편 신청</span></a>
  </div>
 </header>
 
@@ -245,7 +253,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
       <div class="tag"><img src="assets/icon.png" alt="">서울 · 일산 · 김포 헌옷 방문수거</div>
       <h1>안 입는 헌옷,<br><span class="mk">카톡 한 번</span><span class="bd">이면 끝</span></h1>
       <p>집 앞까지 찾아가서 무게 재고 가져갑니다.<br>15kg 이상은 매입, 15kg 미만도 무료 수거.</p>
-      <a class="btn-kakao btn-lg" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="hero"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#191919" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡으로 수거 신청하기</span></a>
+      <a class="btn-kakao btn-lg" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="hero"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡 간편 신청하기</span></a>
      </div>
      <img class="hero-img" src="assets/img/hero.webp" alt="카톡 신청부터 방문 수거까지" width="1100" height="1015">
     </div>
@@ -280,7 +288,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
      <div class="num rv"><small>이만큼 모이면</small><b>15<sub>kg 이상</sub></b><span>매입</span></div>
      <div class="num free rv d1"><small>조금이어도 괜찮아요</small><b>15<sub>kg 미만</sub></b><span>무료 수거</span></div>
     </div>
-    <div class="cta rv"><a class="btn-kakao " href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="price"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#191919" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡으로 단가 문의하기</span></a></div>
+    <div class="cta rv"><a class="btn-kakao " href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="price"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡으로 단가 문의하기</span></a></div>
    </div>
   </div>
  </section>
@@ -341,7 +349,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
     <div>
      <h2><span class="lt">옷장 정리,</span><br><span class="bd">오늘 카톡 한 번으로</span></h2>
      <p>주소와 대략적인 양만 보내주시면 됩니다.</p>
-     <a class="btn-kakao btn-lg" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="band"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#191919" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡으로 수거 신청하기</span></a>
+     <a class="btn-kakao btn-lg" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="band"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡 간편 신청하기</span></a>
     </div>
     <div class="tile"><img src="assets/icon.png" alt="" width="512" height="581"></div>
    </div>
@@ -363,7 +371,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
  </div>
 </footer>
 
-<div class="fixed"><a class="btn-kakao " href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="fixed"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#191919" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡으로 수거 신청하기</span></a></div>
+<div class="fixed"><a class="btn-kakao " href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener" data-pos="fixed"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg><span>카톡 간편 신청하기</span></a></div>
 
 <script>
 (function(){
