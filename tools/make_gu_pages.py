@@ -67,7 +67,7 @@ for slug,ko,dongs,near in GU:
 <script type="application/ld+json">{json.dumps(faqld,ensure_ascii=False)}</script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="../../assets/style.css?v=8">
+<link rel="stylesheet" href="../../assets/style.css?v=10">
 <style>
 .rhero{{padding:150px 0 90px;background:linear-gradient(180deg,#fff 0%,var(--bg) 100%)}}
 .rhero .inner{{display:grid;grid-template-columns:1.2fr .8fr;gap:32px;align-items:center}}
@@ -120,8 +120,8 @@ section[style] .step{{background:#fff}}
    <div class="steps">
     <div class="step"><span class="n">STEP 1</span><img src="../../assets/img/step-apply.webp" alt="" width="400" height="400"><h3>카톡 신청</h3><p>주소와 대략적인 양을 남겨주세요.</p></div>
     <div class="step"><span class="n">STEP 2</span><img src="../../assets/img/step-schedule.webp" alt="" width="400" height="400"><h3>날짜 약속</h3><p>편하신 날에 맞춰 일정을 잡아요.</p></div>
-    <div class="step"><span class="n">STEP 3</span><img src="../../assets/img/step-pickup.webp" alt="" width="400" height="400"><h3>방문 수거</h3><p>{ko} 집 앞으로 직접 찾아가요.</p></div>
-    <div class="step"><span class="n">STEP 4</span><img src="../../assets/img/step-weigh.webp" alt="" width="400" height="400"><h3>계량 · 정산</h3><p>15kg 이상이면 매입 금액을 정산해요.</p></div>
+    <div class="step"><span class="n">STEP 3</span><img src="../../assets/img/step-pickup.webp" alt="" width="400" height="400"><h3>비대면 수거</h3><p>문 앞에 두시면 저녁~새벽 사이 가져가요.</p></div>
+    <div class="step"><span class="n">STEP 4</span><img src="../../assets/img/step-weigh.webp" alt="" width="400" height="400"><h3>계량 · 입금</h3><p>센터에서 계량 후 약 3일 안에 입금해요.</p></div>
    </div>
   </div>
  </section>

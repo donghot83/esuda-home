@@ -208,3 +208,4 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
 .pnote{text-align:center;font-size:14px;color:rgba(255,255,255,.6);margin-top:24px}
 br.m{display:none}@media(max-width:600px){br.m{display:inline}}
 @media(max-width:600px){.btn-lg{font-size:17px;padding:18px 26px}.band .btn-kakao{width:100%;justify-content:center}}
+.box .ask{margin-top:14px;font-size:14px;color:var(--sub);line-height:1.6}
