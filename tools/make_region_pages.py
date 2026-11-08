@@ -85,7 +85,7 @@ for r in regions:
   <div class="wrap inner">
    <div>
     <div class="crumb"><a href="../">이수다</a> › 수거 지역 › {ko}</div>
-    <h1>{ko} 헌옷수거,<br><span class="mk">카톡 한 번</span><span class="bd">이면 끝</span></h1>
+    <h1>{ko} 헌옷수거,<br><span class="mk">무겁게 들고</span> <span class="bd">나가지 마세요.</span></h1>
     <p>{r['lead']}<br>15kg 이상은 매입, 15kg 미만도 무료로 가져갑니다.</p>
     {btn(s+"-hero","카톡 간편 신청하기","btn-lg")}
    </div>
@@ -106,7 +106,7 @@ for r in regions:
   <div class="wrap">
    <span class="label">HOW TO</span>
    <h2><span class="lt">{ko} 헌옷수거,</span><br><span class="bd">이렇게 진행돼요</span></h2>
-   <p class="lead">신청은 카톡으로, 나머지는 저희가 다 해요.</p>
+   <p class="lead">카톡으로 신청하고, 집 앞에서 편하게.</p>
    <div class="steps">
     <div class="step"><span class="n">STEP 1</span><img src="../assets/img/step-apply.webp" alt="" width="400" height="400"><h3>카톡 신청</h3><p>주소와 대략적인 양을 남겨주세요.</p></div>
     <div class="step"><span class="n">STEP 2</span><img src="../assets/img/step-schedule.webp" alt="" width="400" height="400"><h3>날짜 약속</h3><p>편하신 날에 맞춰 일정을 잡아요.</p></div>
