@@ -204,3 +204,7 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
  .final h1{font-size:40px}
 }
 @media(prefers-reduced-motion:reduce){.marquee .track,.scroll i::after{animation:none}}
+.num p{margin-top:16px;font-size:15px;line-height:1.6;color:rgba(255,255,255,.72)}
+.pnote{text-align:center;font-size:14px;color:rgba(255,255,255,.6);margin-top:24px}
+br.m{display:none}@media(max-width:600px){br.m{display:inline}}
+@media(max-width:600px){.btn-lg{font-size:17px;padding:18px 26px}.band .btn-kakao{width:100%;justify-content:center}}
