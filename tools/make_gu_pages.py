@@ -38,10 +38,16 @@ for slug,ko,dongs,near in GU:
     url=f'{BASE}seoul/{slug}/'
     short=ko[:-1] if len(ko)>2 else ko
     title=f'{ko} 헌옷수거 · {ko} 헌옷 방문수거 | 이수다'
-    desc=f'서울 {ko} 헌옷수거는 이수다. {", ".join(dongs[:4])} 등 {ko} 전 지역 집 앞 방문수거. 15kg 이상 매입, 15kg 미만 무료 수거. 카톡으로 간편 신청.'
+    desc=f'서울 {ko} 헌옷수거는 이수다. {", ".join(dongs[:4])} 등 {ko} 전 지역 문 앞 비대면 방문수거. 15kg 이상 매입, 15kg 미만 무료 수거. 카톡으로 간편 신청.'
     kw=', '.join([f'{ko} 헌옷수거',f'{ko} 헌옷방문수거',f'{ko} 헌옷매입',f'{short} 헌옷수거']+[f'{d} 헌옷수거' for d in dongs[:8]])
     ld={"@context":"https://schema.org","@type":"LocalBusiness","name":"이수다","description":desc,"url":url,"image":BASE+"assets/og.png","areaServed":f"서울특별시 {ko}","sameAs":["https://pf.kakao.com/_DxoHVG"]}
-    faqs=[(f'{ko} 어느 동네까지 오시나요?',f'{ko} 전 지역 방문합니다. 카톡으로 주소만 남겨주시면 일정 맞춰 찾아가요.'),('양이 적어도 와주시나요?','네. 15kg 미만도 무료로 수거합니다. 카톡으로 대략적인 양을 알려주세요.'),('얼마나 쳐주나요?','매입 단가는 시기마다 달라서 카톡으로 문의해 주시면 바로 안내해 드립니다.')]
+    nearko='·'.join(NAME[n] for n in near)
+    intro=f'{ko} {"·".join(dongs[:3])}부터 {dongs[-1]}까지, 아파트·빌라·주택 어디든 수거일에 문 앞에 두시면 됩니다. 이웃한 {nearko}도 같은 방식으로 수거합니다.'
+    faqs=[(f'{ko} {dongs[0]}·{dongs[1]}도 수거하나요?',f'네. {", ".join(dongs[:6])} 등 {ko} 전 지역을 수거합니다. 카톡으로 주소만 남겨주세요.'),
+          (f'{ko} 수거일은 언제인가요?',f'{ko}는 지역별 수거일 저녁 7시~새벽 6시 사이에 비대면으로 가져가요. 희망 날짜를 알려 주시면 가까운 수거일로 잡아 드려요.'),
+          ('15kg이 안 되어도 수거하나요?','네. 15kg 미만도 무료로 수거해요. 양이 적어도 편하게 신청하세요.'),
+          ('헌옷 매입 가격은 얼마인가요?','매입 가격은 수출 시세에 따라 달라져요. 카카오채널로 문의하시면 현재 기준을 바로 안내해 드려요.'),
+          ('입금은 언제 되나요?','센터에서 고객별로 따로 계량하고, 약 3일 안에 계량 사진과 함께 계좌로 입금해 드려요.')]
     faqld={"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":q,"acceptedAnswer":{"@type":"Answer","text":a}} for q,a in faqs]}
     faqh=''.join(f'<details><summary>{q}</summary><p>{a}</p></details>' for q,a in faqs)
     chips=''.join(f'<li>{d}</li>' for d in dongs)
@@ -97,8 +103,8 @@ section[style] .step{{background:#fff}}
   <div class="wrap inner">
    <div>
     <div class="crumb"><a href="../../">이수다</a> › <a href="../">서울</a> › {ko}</div>
-    <h1>{ko} 헌옷수거,<br><span class="mk">무겁게 들고</span> <span class="bd">나가지 마세요.</span></h1>
-    <p>{ko} 어디든 집 앞으로 찾아가 무게 재고 가져갑니다.<br>15kg 이상은 매입, 15kg 미만도 무료 수거.</p>
+    <h1>{ko} 헌옷수거,<br><span class="mk">무겁게 들고</span><br><span class="bd">나가지 마세요.</span></h1>
+    <p>{ko} 어디든 카톡으로 신청하면 문 앞에서 비대면으로 수거합니다.<br>15kg 이상 매입 · 15kg 미만 무료 수거</p>
     {btn("gu-"+slug+"-hero","카톡 간편 신청하기","btn-lg")}
    </div>
    <img class="map" src="../../assets/img/area-seoul.webp" alt="서울 {ko} 헌옷수거" width="360" height="360">
@@ -108,7 +114,7 @@ section[style] .step{{background:#fff}}
   <div class="wrap">
    <span class="label">AREA</span>
    <h2><span class="lt">{ko} 전 지역,</span><br><span class="mk">집 앞까지</span> <span class="bd">찾아가요</span></h2>
-   <p class="lead">아래 동네 외에도 {ko} 어디든 카톡으로 주소만 남겨주세요.</p>
+   <p class="lead">{intro}</p>
    <ul class="dong">{chips}</ul>
   </div>
  </section>
@@ -119,7 +125,7 @@ section[style] .step{{background:#fff}}
    <p class="lead">카톡으로 신청하고, 집 앞에서 편하게.</p>
    <div class="steps">
     <div class="step"><span class="n">STEP 1</span><img src="../../assets/img/step-apply.webp" alt="" width="400" height="400"><h3>카톡 신청</h3><p>주소와 대략적인 양을 남겨주세요.</p></div>
-    <div class="step"><span class="n">STEP 2</span><img src="../../assets/img/step-schedule.webp" alt="" width="400" height="400"><h3>날짜 약속</h3><p>편하신 날에 맞춰 일정을 잡아요.</p></div>
+    <div class="step"><span class="n">STEP 2</span><img src="../../assets/img/step-schedule.webp" alt="" width="400" height="400"><h3>일정 조율</h3><p>가까운 {ko} 수거일로 잡아 드려요.</p></div>
     <div class="step"><span class="n">STEP 3</span><img src="../../assets/img/step-pickup.webp" alt="" width="400" height="400"><h3>비대면 수거</h3><p>문 앞에 두시면 저녁~새벽 사이 가져가요.</p></div>
     <div class="step"><span class="n">STEP 4</span><img src="../../assets/img/step-weigh.webp" alt="" width="400" height="400"><h3>계량 · 입금</h3><p>센터에서 계량 후 약 3일 안에 입금해요.</p></div>
    </div>
@@ -136,7 +142,7 @@ section[style] .step{{background:#fff}}
    <div class="card">
     <div>
      <h2><span class="lt">{ko} 옷장 정리,</span><br><span class="bd">오늘 카톡 한 번으로</span></h2>
-     <p>주소와 대략적인 양만 보내주시면 됩니다.</p>
+     <p>주소와 대략적인 수거량만 보내주시면 됩니다.</p>
      {btn("gu-"+slug+"-band","카톡 간편 신청하기","btn-lg")}
      <div class="more">{nearh}<a href="../">서울 전체</a></div>
     </div>
@@ -152,7 +158,7 @@ section[style] .step{{background:#fff}}
    <div class="fnav"><a href="../../gimpo/">김포 헌옷수거</a><a href="../../ilsan/">일산 헌옷수거</a><a href="../">서울 헌옷수거</a></div>
    <div class="ext"><a href="https://pf.kakao.com/_DxoHVG" target="_blank" rel="noopener">카카오채널 이수다</a></div>
   </div>
-  <div class="copy"><b>이수다무역</b>서울 · 일산 · 김포 헌옷 방문수거 · 헌옷 매입</div>
+  <div class="copy"><b>이수다무역 | ESUDA TRADE</b>다시 입을 수 있는 옷, 다음 쓰임으로 연결합니다.</div>
  </div>
 </footer>
 <div class="fixed">{btn("gu-"+slug+"-fixed","카톡 간편 신청하기")}</div>
@@ -170,6 +176,6 @@ if '.dong li a' not in s:
 open(sp,'w',encoding='utf-8').write(s)
 # sitemap
 urls=['','gimpo/','ilsan/','seoul/']+[f'seoul/{g[0]}/' for g in GU]
-sm='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join(f'  <url><loc>{BASE}{u}</loc><lastmod>2026-11-07</lastmod></url>\n' for u in urls)+'</urlset>\n'
+sm='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join(f'  <url><loc>{BASE}{u}</loc><lastmod>2026-11-12</lastmod></url>\n' for u in urls)+'</urlset>\n'
 open(f'{R}/sitemap.xml','w').write(sm)
 print(len(GU),'pages')
