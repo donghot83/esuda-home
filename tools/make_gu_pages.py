@@ -1,5 +1,6 @@
 # 서울 구별 검색용 페이지 생성: python3 tools/make_gu_pages.py
 import os,json,re
+PH=json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'real_photos.json'),encoding='utf-8'))
 R=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE='https://esuda.kr/'
 K='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.8 1.9 5.3 4.7 6.7l-1 3.7c-.1.3.3.6.6.4l4.4-2.9c.4 0 .9.1 1.3.1 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>'
@@ -35,6 +36,7 @@ GU=[
 ]
 NAME={g[0]:g[1] for g in GU}
 for slug,ko,dongs,near in GU:
+    _k=slug
     url=f'{BASE}seoul/{slug}/'
     short=ko[:-1] if len(ko)>2 else ko
     title=f'{ko} 헌옷수거 · {ko} 헌옷 방문수거 | 이수다'
@@ -49,6 +51,16 @@ for slug,ko,dongs,near in GU:
           ('헌옷 매입 가격은 얼마인가요?','매입 가격은 수출 시세에 따라 달라져요. 카카오채널로 문의하시면 현재 기준을 바로 안내해 드려요.'),
           ('입금은 언제 되나요?','센터에서 고객별로 따로 계량하고, 약 3일 안에 계량 사진과 함께 계좌로 입금해 드려요.')]
     faqld={"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":q,"acceptedAnswer":{"@type":"Answer","text":a}} for q,a in faqs]}
+    caps=PH.get(_k)
+    photoh=('' if not caps else f'''
+ <section class="realsec">
+  <div class="wrap">
+   <span class="label">REAL</span>
+   <h2><span class="lt">{ko}에서</span> <span class="bd">실제로 수거한 모습</span></h2>
+   <p class="lead">문 앞에서 가져와 센터에서 따로 계량합니다.</p>
+   <div class="real">'''+''.join(f'<figure><img src="../../assets/img/real/{_k}-{i+1}.webp" alt="{ko} 헌옷수거 실제 사진 - {c}" loading="lazy"><figcaption>{c}</figcaption></figure>' for i,c in enumerate(caps))+'''</div>
+  </div>
+ </section>''')
     faqh=''.join(f'<details><summary>{q}</summary><p>{a}</p></details>' for q,a in faqs)
     chips=''.join(f'<li>{d}</li>' for d in dongs)
     nearh=''.join(f'<a href="../{n}/">{NAME[n]} 헌옷수거</a>' for n in near)
@@ -73,7 +85,7 @@ for slug,ko,dongs,near in GU:
 <script type="application/ld+json">{json.dumps(faqld,ensure_ascii=False)}</script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="../../assets/style.css?v=10">
+<link rel="stylesheet" href="../../assets/style.css?v=11">
 <style>
 .rhero{{padding:150px 0 90px;background:linear-gradient(180deg,#fff 0%,var(--bg) 100%)}}
 .rhero .inner{{display:grid;grid-template-columns:1.2fr .8fr;gap:32px;align-items:center}}
@@ -117,7 +129,7 @@ section[style] .step{{background:#fff}}
    <p class="lead">{intro}</p>
    <ul class="dong">{chips}</ul>
   </div>
- </section>
+ </section>{photoh}
  <section style="background:var(--bg)">
   <div class="wrap">
    <span class="label">HOW TO</span>

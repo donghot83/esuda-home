@@ -209,3 +209,8 @@ footer .copy b{color:#e2e8f0;font-size:16px;display:block;margin-bottom:6px}
 br.m{display:none}@media(max-width:600px){br.m{display:inline}}
 @media(max-width:600px){.btn-lg{font-size:17px;padding:18px 26px}.band .btn-kakao{width:100%;justify-content:center}}
 .box .ask{margin-top:14px;font-size:14px;color:var(--sub);line-height:1.6}
+.realsec{padding-top:0}
+.real{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:760px}
+.real figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden}
+.real img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover}
+.real figcaption{padding:12px 16px;font-size:14px;color:var(--sub)}
