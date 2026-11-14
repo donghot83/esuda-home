@@ -12,6 +12,8 @@ test('주소 분류: 한강 남쪽·김포 = 홀수, 북쪽·일산 = 짝수', (
   assert.strictEqual(R.classifyAddress(addr('서울', '마포구')).parity, 'even');
   assert.strictEqual(R.classifyAddress(addr('경기', '고양시 일산동구')).parity, 'even');
   assert.strictEqual(R.classifyAddress(addr('경기', '고양시 일산서구')).parity, 'even');
+  assert.strictEqual(R.classifyAddress(addr('경기', '고양시 덕양구')).parity, 'even');
+  assert.strictEqual(R.classifyAddress(addr('경기', '고양시 덕양구')).ok, true);
 });
 
 test('주소 분류: 25개 구가 모두 등록돼 있고 남 11 · 북 14', () => {
@@ -21,7 +23,7 @@ test('주소 분류: 25개 구가 모두 등록돼 있고 남 11 · 북 14', () 
 });
 
 test('주소 분류: 확인 필요 지역과 지역 밖은 예약 불가 (카톡 안내)', () => {
-  const d = R.classifyAddress(addr('경기', '고양시 덕양구'));
+  const d = R.classifyAddress(addr('경기', '하남시'), { '경기|하남시': { zone: 'south', status: 'check' } });
   assert.strictEqual(d.ok, false); assert.strictEqual(d.reason, 'check');
   const o = R.classifyAddress(addr('경기', '성남시 분당구'));
   assert.strictEqual(o.ok, false); assert.strictEqual(o.reason, 'outside');

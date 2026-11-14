@@ -42,6 +42,8 @@ test('남쪽 주소는 짝수일 거부, 홀수일 확정 / 김포 홀수, 일�
   assert.strictEqual(env.post(good({ address: south, date: '2026-11-17' })).ok, true);
   assert.strictEqual(env.post(good({ address: { sido: '경기', sigungu: '김포시', roadAddress: '경기 김포시 가상로 3' }, date: '2026-11-19' })).ok, true);
   assert.strictEqual(env.post(good({ address: { sido: '경기', sigungu: '고양시 일산서구', roadAddress: '경기 고양시 가상로 4' }, date: '2026-11-20' })).ok, true);
+  assert.strictEqual(env.post(good({ address: { sido: '경기', sigungu: '고양시 덕양구', roadAddress: '경기 고양시 가상로 5' }, date: '2026-11-24' })).ok, true);
+  assert.strictEqual(env.post(good({ address: { sido: '경기', sigungu: '고양시 덕양구', roadAddress: '경기 고양시 가상로 5' }, date: '2026-11-19' })).ok, false);
 });
 
 test('고객이 날짜를 고른 뒤 직원이 마감 → 제출 차단, 다른 날짜는 가능', () => {
