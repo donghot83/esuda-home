@@ -1,0 +1,47 @@
+// 로컬 미리보기: 홈페이지 파일 + 가짜 예약 서버(/api). 실제 구글 시트·고객 정보 없음.
+// 사용: node tools/mock_server.js  →  http://localhost:8787/apply/
+// 테스트용 마감: /api?action=mockClose&date=YYYY-MM-DD&msg=... (로컬 전용)
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { createEnv } = require('../tests/gas-harness.js');
+
+const ROOT = path.join(__dirname, '..');
+const PORT = +process.env.PORT || 8787;
+const env = createEnv({ staffToken: 'local-test-token' });
+env.get({ action: 'schedule' }); // 시트 만들기
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };
+
+http.createServer((req, res) => {
+  const u = new URL(req.url, 'http://localhost');
+  if (u.pathname === '/api') {
+    if (req.method === 'GET' && u.searchParams.get('action') === 'mockClose') {
+      env.sheet('마감').appendRow([u.searchParams.get('date'), u.searchParams.get('end') || '', u.searchParams.get('zone') || 'all', u.searchParams.get('msg') || '', 'mock']);
+      res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"ok":true}');
+    }
+    if (req.method === 'GET' && u.searchParams.get('action') === 'mockDump') { // 로컬 확인용: 저장된 예약(가상 데이터)
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end(JSON.stringify(env.sheet('예약').rows));
+    }
+    if (req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(env.get(Object.fromEntries(u.searchParams))));
+    }
+    let body = '';
+    req.on('data', c => (body += c));
+    req.on('end', () => {
+      let out;
+      try { out = JSON.parse(env.ctx.doPost({ postData: { contents: body } }).text); } catch (e) { out = { ok: false, error: 'server_error' }; }
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(out));
+    });
+    return;
+  }
+  let p = decodeURIComponent(u.pathname);
+  if (p.endsWith('/')) p += 'index.html';
+  const f = path.join(ROOT, p);
+  if (!f.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
+  fs.readFile(f, (err, buf) => {
+    if (err) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
+    res.end(buf);
+  });
+}).listen(PORT, () => console.log('mock server http://localhost:' + PORT + '/apply/'));

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>헌옷 방문수거 신청 | 이수다</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="description" content="이수다 헌옷 방문수거 신청">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../assets/apply.css?v=1">
+</head>
+<body>
+<header class="ap-head">
+  <a href="../" class="ap-logo"><img src="../assets/logo.png" alt="이수다"></a>
+  <span class="ap-head-t">헌옷 방문수거 신청</span>
+</header>
+
+<main class="ap-main" id="formView">
+  <div class="ap-hero">
+    <h1>문 앞에 두시면<br><b>저희가 가져갈게요</b></h1>
+    <p>주소를 고르면 그 동네의 수거 가능한 날짜가 나와요. 15kg 이상은 무게를 재서 계좌로 입금해 드려요.</p>
+    <p class="ap-test" id="testBadge" hidden>테스트 모드 — 실제 예약이 아니에요</p>
+  </div>
+
+  <form id="applyForm" novalidate>
+    <!-- 1. 주소 -->
+    <section class="ap-card" id="secAddress">
+      <h2><span class="n">1</span>어디로 수거하러 갈까요? <em>필수</em></h2>
+      <button type="button" class="ap-addr-btn" id="btnAddr">주소 검색</button>
+      <div class="ap-addr" id="addrView" hidden>
+        <p class="road" id="addrRoad"></p>
+        <p class="jibun" id="addrJibun"></p>
+      </div>
+      <p class="ap-zone" id="zoneMsg" hidden></p>
+      <label class="ap-field" id="detailWrap" hidden>
+        <span>상세주소 (동·호수)</span>
+        <input id="addrDetail" name="addressDetail" maxlength="60" placeholder="예: 101동 1001호 / 단독주택은 '단독'" autocomplete="address-line2">
+      </label>
+      <p class="ap-err" data-err="address"></p><p class="ap-err" data-err="addressDetail"></p>
+    </section>
+
+    <!-- 2. 날짜 -->
+    <section class="ap-card" id="secDate">
+      <h2><span class="n">2</span>언제 수거할까요? <em>필수</em></h2>
+      <p class="ap-hint" id="dateHint">주소를 먼저 선택해 주세요.</p>
+      <div class="ap-notice" id="closeNotice" hidden></div>
+      <div class="ap-dates" id="dateList"></div>
+      <p class="ap-small">수거일 저녁 7시 이후 순서대로 방문해요. 시간 지정은 어려워요.</p>
+      <p class="ap-err" data-err="date"></p>
+    </section>
+
+    <!-- 3. 수거 정보 -->
+    <section class="ap-card">
+      <h2><span class="n">3</span>수거할 옷은 얼마나 되나요? <em>필수</em></h2>
+      <div class="ap-chips" data-group="amount"></div>
+      <p class="ap-err" data-err="amount"></p>
+
+      <h3>물건은 어디에 두실 건가요?</h3>
+      <div class="ap-chips" data-group="place"></div>
+      <label class="ap-field" id="placeDetailWrap" hidden><span>놓을 곳</span><input id="placeDetail" maxlength="100" placeholder="예: 1층 경비실 옆"></label>
+      <p class="ap-err" data-err="place"></p><p class="ap-err" data-err="placeDetail"></p>
+
+      <h3>공동현관 출입 방법</h3>
+      <div class="ap-chips" data-group="entrance"></div>
+      <label class="ap-field" id="entranceCodeWrap" hidden><span>공동현관 비밀번호</span><input id="entranceCode" maxlength="40" placeholder="예: #1234*" autocomplete="off"></label>
+      <p class="ap-err" data-err="entrance"></p>
+    </section>
+
+    <!-- 4. 신청인 -->
+    <section class="ap-card">
+      <h2><span class="n">4</span>신청하시는 분 <em>필수</em></h2>
+      <label class="ap-field"><span>이름</span><input id="name" maxlength="20" autocomplete="name" placeholder="홍길동"></label>
+      <p class="ap-err" data-err="name"></p>
+      <label class="ap-field"><span>휴대폰 번호</span><input id="phone" inputmode="numeric" maxlength="13" autocomplete="tel" placeholder="010-1234-5678"></label>
+      <p class="ap-err" data-err="phone"></p>
+    </section>
+
+    <!-- 5. 계좌 -->
+    <section class="ap-card">
+      <h2><span class="n">5</span>매입금액 받으실 계좌 <em>필수</em></h2>
+      <p class="ap-hint">센터에서 무게를 잰 뒤 영업일 기준 3일 안에 입금해 드려요. 15kg 미만은 무상수거예요.</p>
+      <label class="ap-field"><span>은행</span><select id="bank"><option value="">은행 선택</option></select></label>
+      <p class="ap-err" data-err="bank"></p>
+      <label class="ap-field"><span>계좌번호</span><input id="account" inputmode="numeric" maxlength="20" placeholder="숫자만 입력" autocomplete="off"></label>
+      <p class="ap-err" data-err="account"></p>
+      <label class="ap-field"><span>예금주</span><input id="holder" maxlength="20" placeholder="예금주 이름"></label>
+      <p class="ap-err" data-err="holder"></p>
+    </section>
+
+    <!-- 6. 요청사항 -->
+    <section class="ap-card">
+      <h2><span class="n">6</span>기사님께 전할 말 <em class="opt">선택</em></h2>
+      <textarea id="memo" maxlength="300" rows="3" placeholder="예: 박스 2개, 비닐 1개예요"></textarea>
+    </section>
+
+    <!-- 7. 동의 -->
+    <section class="ap-card ap-agree">
+      <h2><span class="n">7</span>신청 전에 확인해 주세요</h2>
+      <ul class="ap-rules">
+        <li>의류·신발·가방이 대상이에요. 오염·찢김이 심한 옷, 속옷, 이불, 커튼은 매입하지 않아요.</li>
+        <li>최종 무게가 <b>15kg 이상이면 1kg당 매입</b>, 15kg 미만은 무상수거예요. 매입 단가는 시세에 따라 바뀔 수 있어요.</li>
+        <li>수거한 옷은 바로 분류되어 돌려드릴 수 없어요.</li>
+        <li>건물 밖에 두면 분실될 수 있어요. 가능하면 건물 안 문 앞에 두세요.</li>
+      </ul>
+      <label class="ap-check"><input type="checkbox" id="agreeNotice"> 위 내용을 확인했어요 <em>필수</em></label>
+      <p class="ap-err" data-err="agreeNotice"></p>
+      <details class="ap-priv">
+        <summary>개인정보 수집·이용 안내 보기</summary>
+        <p>수집 항목: 이름, 휴대폰 번호, 주소, 은행·계좌번호·예금주, 공동현관 정보, 요청사항<br>
+        목적: 방문수거 일정 안내와 매입금액 입금<br>
+        보관: 수거·입금 완료 후 6개월 이내 파기<br>
+        수집·이용 주체: 이수다무역<br>
+        동의하지 않으실 수 있지만, 동의하지 않으면 신청이 어려워요. 카카오채널로도 신청할 수 있어요.</p>
+      </details>
+      <label class="ap-check"><input type="checkbox" id="agreePrivacy"> 개인정보 수집·이용에 동의해요 <em>필수</em></label>
+      <p class="ap-err" data-err="agreePrivacy"></p>
+    </section>
+
+    <p class="ap-err ap-err-top" id="formError" role="alert"></p>
+    <button type="submit" class="ap-submit" id="btnSubmit">수거 신청하기</button>
+    <a class="ap-alt" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener">카카오채널 채팅으로 신청하기</a>
+  </form>
+</main>
+
+<main class="ap-main" id="doneView" hidden>
+  <section class="ap-card ap-done">
+    <div class="ok">✓</div>
+    <h1>수거 예약이 확정됐어요</h1>
+    <dl>
+      <dt>예약번호</dt><dd id="doneId"></dd>
+      <dt>수거일</dt><dd id="doneDate"></dd>
+      <dt>주소</dt><dd id="doneAddr"></dd>
+    </dl>
+    <ul class="ap-rules">
+      <li>수거일 <b>저녁 7시 전까지</b> 물건을 문 앞에 두세요.</li>
+      <li>수거 당일 기사님이 카카오톡이나 문자로 안내드려요.</li>
+      <li>변경·취소는 카카오채널로 예약번호와 함께 알려 주세요.</li>
+    </ul>
+    <a class="ap-alt" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener">카카오채널로 문의하기</a>
+  </section>
+</main>
+
+<div class="ap-layer" id="postLayer" hidden>
+  <div class="ap-layer-head"><b>주소 검색</b><button type="button" id="btnPostClose" aria-label="닫기">✕</button></div>
+  <div id="postBox" class="ap-layer-body"></div>
+</div>
+
+<script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+<script src="../assets/apply-rules.js?v=1"></script>
+<script src="../assets/apply-config.js?v=1"></script>
+<script src="../assets/apply.js?v=1"></script>
+</body>
+</html>
