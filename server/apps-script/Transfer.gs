@@ -16,7 +16,10 @@ var BANK_CODES = {
   '신한은행': '088', 'KB국민은행': '004', '우리은행': '020', '하나은행': '081', 'NH농협은행': '011', 'IBK기업은행': '003',
   '카카오뱅크': '090', '토스뱅크': '092', '새마을금고': '045', '우체국': '071', 'SC제일은행': '023', '부산은행': '032',
   '대구은행': '031', '경남은행': '039', '광주은행': '034', '전북은행': '037', '수협은행': '007', '신협': '048',
-  '케이뱅크': '089', '씨티은행': '027', '산림조합': '064', '저축은행': '050'
+  '케이뱅크': '089', '씨티은행': '027', '산림조합': '064', '저축은행': '050',
+  // 증권사 (금융결제원 기관코드 — 첫 이체 때 은행 화면에서 기관명이 맞는지 한 번 확인)
+  '키움증권': '264', '미래에셋증권': '238', '삼성증권': '240', 'NH투자증권': '247', '한국투자증권': '243', 'KB증권': '218',
+  '신한투자증권': '278', '토스증권': '271', '카카오페이증권': '288', '대신증권': '267', '하나증권': '270', '메리츠증권': '287'
 };
 
 // 업로드용 시트 열 순서 = 신한 BizBank '자금이체 등록 > 파일불러오기' 지정 필드 순서
@@ -42,6 +45,8 @@ function ensureTransferHeaders_(sh) {
 
 /** 장부에서 예약번호 줄 찾기 → {weight, loss, amount(장부 I열), row} | null */
 function ledgerRowFor_(lss, dateStr, rid) {
+  lss = ledgerOpen_(dateStr);           // 연도별 장부 (2027년 예약은 27년 장부에서 찾음)
+  if (!lss) return null;
   var sh = ledgerMonthSheet_(lss, dateStr);
   if (!sh) return null;
   var v = sh.getDataRange().getValues();
@@ -80,7 +85,7 @@ function makeTransferFile(opts) {
     var col = function (h) { return hdr.indexOf(h); };
     var lid = PropertiesService.getScriptProperties().getProperty('LEDGER_ID');
     if (!lid) return { error: 'no_ledger' };
-    var lss = SpreadsheetApp.openById(lid), unit = transferUnitPrice_();
+    var lss = null, unit = transferUnitPrice_();
     var now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
     var rows = [], check = [], marks = [], skipped = [], free = 0, total = 0;
     for (var i = 1; i < data.length; i++) {
@@ -95,7 +100,7 @@ function makeTransferFile(opts) {
       if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거' }); continue; }
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
-      if (!code || acct.length < 9) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
+      if (!code || acct.length < 6) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
       var holder = String(r[col('예금주')] || r[col('이름')]);
       var rec = { '은행코드': code, '은행명': bank, '계좌번호': acct, '금액': pa.amount, '예금주': holder,
         '입금은행': code, '입금계좌': acct, '고객관리성명': holder, '입금액': pa.amount,
@@ -150,6 +155,10 @@ function markTransferPaid(fileName) {
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('이수다')
+      .addItem('예약 취소 (예약번호)', 'menuCancel_')
+      .addItem('현황판 새로 고침', 'menuDashboard_')
+      .addItem('점검 메일 지금 보내기', 'menuReportNow_')
+      .addSeparator()
       .addItem('신한 다건이체 파일 만들기', 'menuMakeTransfer_')
       .addItem('이체 파일 입금완료 처리', 'menuMarkPaid_')
       .addToUi();

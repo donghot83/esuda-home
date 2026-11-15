@@ -6,13 +6,24 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 
+// 서식 메서드(setFontWeight 등)는 아무 일 없이 자기 자신을 돌려주는 range
+function anyRange(base) {
+  const p = new Proxy(base, { get(t, k) { if (k in t) return (...a) => { const r = t[k](...a); return r === undefined ? p : r; }; return () => p; } });
+  return p;
+}
+
 function makeSheet(name) {
   const rows = [];
   const sh = {
     name, rows,
     appendRow(r) { rows.push(r.map(x => (typeof x === 'string' && x.startsWith("'")) ? x.slice(1) : x)); },
     getDataRange() { return { getValues: () => rows.map(r => r.slice()) }; },
-    getRange(r, c) { return { setValue(v) { while (rows.length < r) rows.push([]); rows[r - 1][c - 1] = v; } }; },
+    getRange(r, c, nr, nc) { return anyRange({
+      setValue(v) { while (rows.length < r) rows.push([]); rows[r - 1][c - 1] = v; },
+      setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => { while (rows.length < r + i) rows.push([]); rows[r - 1 + i][c - 1 + j] = v; })); },
+      getValue() { return (rows[r - 1] || [])[c - 1]; }
+    }); },
+    clear() { rows.length = 0; }, setFrozenRows() {}, setColumnWidth() {}, setColumnWidths() {}, getName() { return name; },
     failNextAppend: false
   };
   const orig = sh.appendRow;
@@ -33,11 +44,15 @@ function makeGrid(name, rows) {
       const rng = {
         setValue(v) { fit(r); rows[r - 1][c - 1] = v; return rng; },
         setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => { fit(r + i); rows[r - 1 + i][c - 1 + j] = v; })); return rng; },
-        setNumberFormat() { return rng; },
+        setNumberFormat(f) { fit(r); (rows[r - 1].fmt = rows[r - 1].fmt || {})[c] = f; return rng; },
+        getNumberFormats() { return Array.from({ length: nr || 1 }, (_, i) => [((rows[r - 1 + i] || {}).fmt || {})[c] || '']); },
+        getValue() { return (rows[r - 1] || [])[c - 1]; },
         copyTo() {}
       };
       return rng;
     },
+    deleteRow(r) { rows.splice(r - 1, 1); },
+    getName() { return name; },
     setName(n) { this.name = n; }
   };
 }
@@ -57,8 +72,10 @@ function createEnv(opts = {}) {
   const sheets = {};
   const props = { STAFF_TOKEN: opts.staffToken || 'test-token' };
   if (opts.ledger) props.LEDGER_ID = 'LEDGER';
+  Object.assign(props, opts.props || {});
   if (opts.notify) props.NOTIFY_EMAILS = opts.notify;
   const ledgerSheets = {};
+  const otherLedgers = {};
   const created = [];
   const drive = { folders: {}, files: [] };
   const mails = [];
@@ -72,9 +89,11 @@ function createEnv(opts = {}) {
         getSheetByName: n => sheets[n] || null,
         insertSheet: n => (sheets[n] = makeSheet(n))
       }),
+      newDataValidation: () => anyRange({}),
       openById: id => {
         if (opts.ledgerFail) throw new Error('ledger unavailable');
-        return { getSheetByName: n => ledgerSheets[n] || null, getSpreadsheetTimeZone: () => opts.ledgerTz || 'Asia/Seoul' };
+        const sheetsOf = id === 'LEDGER' ? ledgerSheets : (otherLedgers[id] = otherLedgers[id] || {});
+        return { getSheetByName: n => sheetsOf[n] || null, getSpreadsheetTimeZone: () => opts.ledgerTz || 'Asia/Seoul' };
       },
       CopyPasteType: { PASTE_FORMAT: 'format' },
       create: n => { const s = makeSpreadsheet(n); created.push(s); return s; },
@@ -90,6 +109,8 @@ function createEnv(opts = {}) {
         drive.folders[id] = f; return f; }
     },
     MailApp: { sendEmail: m => { mails.push(m); } },
+    ScriptApp: { getProjectTriggers: () => (opts.noTrigger ? [] : [{ getHandlerFunction: () => 'syncLedgerPending' }]) },
+    Logger: { log() {} },
     ContentService: {
       MimeType: { JSON: 'json' },
       createTextOutput: s => ({ text: s, setMimeType() { return this; } })
@@ -119,9 +140,10 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Ledger.gs'), 'utf8'), ctx, { filename: 'Ledger.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Transfer.gs'), 'utf8'), ctx, { filename: 'Transfer.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Notify.gs'), 'utf8'), ctx, { filename: 'Notify.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Report.gs'), 'utf8'), ctx, { filename: 'Report.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
-    ctx, sheets, ledger: ledgerSheets, created, drive, mails,
+    ctx, sheets, ledger: ledgerSheets, otherLedgers, props, created, drive, mails,
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],

@@ -65,7 +65,7 @@ function notifyBooking_(c, rid, countThatDay) {
   var subject = '[이수다 새 예약] ' + d + ' ' + ledgerArea_(c) + ' · ' + c.name + ' · ' + c.amount;
   var body = [
     '예약번호: ' + rid,
-    '수거일: ' + d + ' (이날 ' + countThatDay + '건째)',
+    '수거일: ' + d + ' (이날 장부 포함 ' + countThatDay + '건 / 한도 ' + rules_().CONFIG.dailyCap + '건)',
     '동네: ' + c.sigungu + ' ' + c.bname,
     '수거양: ' + c.amount,
     '놓을 곳: ' + c.place + (c.placeDetail ? ' (' + c.placeDetail + ')' : ''),

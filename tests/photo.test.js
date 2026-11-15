@@ -50,7 +50,7 @@ test('알림 메일: NOTIFY_EMAILS 설정 시 예약마다 요약 메일, 연락
   const m = env.mails[1];
   assert.strictEqual(m.to, 'boss@example.com,staff@example.com');
   assert.match(m.subject, /^\[이수다 새 예약\] 11\/16\(월\) 마포구 · 가상둘 · 15kg 이상$/);
-  assert.match(m.body, /이날 2건째/);
+  assert.match(m.body, /이날 장부 포함 2건 \/ 한도 22건/);
   assert.ok(!/010-0000-0000|0000000000|#1234#/.test(m.subject + m.body));
 });
 

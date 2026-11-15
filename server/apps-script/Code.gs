@@ -54,7 +54,7 @@ function loadSchedule_() {
   for (var i = 1; i < cl.length; i++) {
     var s = fmtDate_(cl[i][0]);
     if (!s) continue;
-    closures.push({ start: s, end: fmtDate_(cl[i][1]) || s, zone: String(cl[i][2] || 'all').trim() || 'all', message: String(cl[i][3] || '').trim() });
+    closures.push({ start: s, end: fmtDate_(cl[i][1]) || s, zone: zoneCode_(cl[i][2]), message: String(cl[i][3] || '').trim() });
   }
   var op = sheet_(SHEET_OPEN, ['날짜', '메모']).getDataRange().getValues();
   var openDates = [];
@@ -62,16 +62,48 @@ function loadSchedule_() {
   return { closures: closures, openDates: openDates };
 }
 
-/** 날짜별 확정 예약 수 {'YYYY-MM-DD': n} — 하루 한도 자동 마감용 (숫자만, 고객 정보 없음) */
-function countsByDate_(data) {
+/** 마감 탭 '구역' 칸: 전체 / 남쪽(홀수일) / 북쪽(짝수일) — 영어 코드도 받음 */
+function zoneCode_(x) {
+  var s = String(x || '').trim();
+  if (/^south$|남/.test(s)) return 'south';
+  if (/^north$|북/.test(s)) return 'north';
+  return 'all';
+}
+
+/** 신청페이지로 들어온 날짜별 확정 예약 수 {'YYYY-MM-DD': n} (onlyUnsynced=true 면 아직 장부에 안 들어간 것만) */
+function pageCountsByDate_(data, onlyUnsynced) {
   if (!data) data = sheet_(SHEET_BOOK, BOOK_HEADERS).getDataRange().getValues();
-  var hdr = data[0] || [], cDate = hdr.indexOf('수거일'), cSt = hdr.indexOf('확정상태'), out = {};
+  var hdr = data[0] || [], cDate = hdr.indexOf('수거일'), cSt = hdr.indexOf('확정상태'), cSync = hdr.indexOf('장부반영'), out = {};
   for (var i = 1; i < data.length; i++) {
     if (cSt >= 0 && String(data[i][cSt]) !== '확정') continue;
+    if (onlyUnsynced && cSync >= 0 && String(data[i][cSync]) === '완료') continue;
     var d = fmtDate_(data[i][cDate]);
     if (d) out[d] = (out[d] || 0) + 1;
   }
   return out;
+}
+
+/**
+ * 날짜별 전체 예약 수 — 하루 22건 자동 마감용 (숫자만, 고객 정보 없음)
+ * 2026-11-15: 카톡·직원이 장부에 직접 넣은 예약도 세도록 장부 줄 수(10분마다 갱신)를 함께 본다.
+ *   = max(장부 줄 수 + 아직 장부에 안 들어간 신청, 신청페이지 확정 수)
+ */
+function countsByDate_(data) {
+  if (!data) data = sheet_(SHEET_BOOK, BOOK_HEADERS).getDataRange().getValues();
+  var all = pageCountsByDate_(data, false), wait = pageCountsByDate_(data, true), led = {};
+  try { led = ledgerCounts_(); } catch (e) {}
+  var out = {}, keys = {};
+  [all, wait, led].forEach(function (o) { Object.keys(o).forEach(function (k) { keys[k] = 1; }); });
+  Object.keys(keys).forEach(function (d) { out[d] = Math.max((led[d] || 0) + (wait[d] || 0), all[d] || 0); });
+  return out;
+}
+
+/** 서버 오류 기록 ('오류' 탭) — 매일 점검 메일에 같이 보고 */
+function logError_(where, err) {
+  try {
+    var sh = sheet_('오류', ['시각', '위치', '내용']);
+    sh.appendRow([Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'), where, String((err && err.message) || err).slice(0, 300)]);
+  } catch (e) {}
 }
 
 function rand4_() {
@@ -91,6 +123,7 @@ function doGet(e) {
     }
     return json_({ ok: false, error: 'unknown_action' });
   } catch (err) {
+    logError_('일정 조회', err);
     return json_({ ok: false, error: 'server_error' });
   }
 }
@@ -107,6 +140,7 @@ function doPost(e) {
     if (body.action === 'markSynced') return json_(markSynced_(body.token, body.ids));
     return json_({ ok: false, error: 'unknown_action' });
   } catch (err) {
+    logError_('신청 처리(' + body.action + ')', err);
     return json_({ ok: false, error: 'server_error' });
   }
 }
@@ -158,8 +192,8 @@ function submit_(p) {
         sh.getRange(newRow, hdr.indexOf('장부반영') + 1).setValue('완료');
         sh.getRange(newRow, hdr.indexOf('장부반영시각') + 1).setValue(now);
       }
-    } catch (err) { /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
-    try { notifyBooking_(c, rid, (countsByDate_(data)[c.date] || 0) + 1); } catch (err) { /* 알림 실패는 예약에 영향 없음 */ }
+    } catch (err) { logError_('장부 입력', err); /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
+    try { notifyBooking_(c, rid, countsByDate_(sh.getDataRange().getValues())[c.date] || 1); } catch (err) { logError_('알림 메일', err); }
     return { ok: true, duplicate: false, reservationId: rid, date: c.date };
   } finally {
     lock.releaseLock();
