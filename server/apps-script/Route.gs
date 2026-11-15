@@ -110,7 +110,7 @@ function routeDate(date, opts) {
   var lss = ledgerOpen_(date), sh = lss && ledgerMonthSheet_(lss, date);
   if (!sh) return { ok: false, msg: '장부에 이 달 시트가 없어요' };
   var tz = lss.getSpreadsheetTimeZone() || 'GMT';
-  var lock = LockService.getScriptLock();
+  var lock = ledgerLock_();
   if (!lock.tryLock(20000)) return { ok: false, msg: '잠시 뒤 다시 해 주세요' };
   try {
     var v = sh.getDataRange().getValues(), rows = [];

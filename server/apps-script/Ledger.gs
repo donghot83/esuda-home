@@ -18,6 +18,12 @@
 var LEDGER_COL = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, memo: 11 };
 var LEDGER_GAP = 2; // 날짜 묶음 사이 빈 줄 수
 
+/**
+ * 장부 작업 전용 잠금 (2026-11-16): 5분 자동 반영·동선·취소가 장부를 오래 만지는 동안
+ * 고객 신청(스크립트 잠금)이 기다리다 'busy'로 실패하던 문제 → 장부 작업은 문서 잠금으로 분리
+ */
+function ledgerLock_() { return LockService.getDocumentLock() || LockService.getScriptLock(); }
+
 /** 예약 날짜(YYYY-MM-DD)에 맞는 장부 파일 ID — 없으면 '' */
 function ledgerIdFor_(dateStr) {
   var p = PropertiesService.getScriptProperties();
@@ -231,7 +237,7 @@ function bookRowToClean_(hdr, row) {
 
 /** '대기' 예약을 장부에 다시 넣기 + 장부 줄 수·현황판 새로 고침 — 시간 트리거(10분마다). 반환 {added, waiting} */
 function syncLedgerPending() {
-  var lock = LockService.getScriptLock();
+  var lock = ledgerLock_();
   if (!lock.tryLock(15000)) return { added: 0, waiting: -1 };
   var res;
   try {

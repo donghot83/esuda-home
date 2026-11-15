@@ -88,7 +88,7 @@ function createEnv(opts = {}) {
   const fetches = [];
   Object.entries(opts.ledger || {}).forEach(([n, rows]) => { ledgerSheets[n] = makeGrid(n, rows); });
   if (opts.ledgerFail) props.LEDGER_ID = 'LEDGER';
-  let locked = false;
+  let locked = false, docLocked = false;
   const ctx = {
     console,
     SpreadsheetApp: {
@@ -106,7 +106,8 @@ function createEnv(opts = {}) {
       create: n => { const s = makeSpreadsheet(n); created.push(s); return s; },
       flush() {}
     },
-    LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }) },
+    LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }),
+      getDocumentLock: () => ({ tryLock: () => (docLocked ? false : (docLocked = true)), releaseLock: () => { docLocked = false; } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     DriveApp: {
       getFolderById: id => { const f = drive.folders[id]; if (!f) throw new Error('no folder'); return f; },
@@ -165,7 +166,8 @@ function createEnv(opts = {}) {
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],
-    setLocked: v => { locked = v; }
+    setLocked: v => { locked = v; },
+    setDocLocked: v => { docLocked = v; }
   };
 }
 

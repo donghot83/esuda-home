@@ -111,12 +111,8 @@ function driverMark_(b) {
   if (!checkDriverKey_(b.key)) return { ok: false, error: 'forbidden' };
   var date = String(b.date || ''), id = String(b.id || '').slice(0, 200), state = String(b.state || '');
   if (!rules_().parseYmd(date) || !id || ['완료', '못함', ''].indexOf(state) < 0) return { ok: false, error: 'bad_request' };
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
-  try {
-    var sh = sheet_(SHEET_DRIVER, DRIVER_LOG_HEADERS);
-    sh.appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
-  } finally { lock.releaseLock(); }
+  sheet_(SHEET_DRIVER, DRIVER_LOG_HEADERS)  // 한 줄 추가라 잠금 없이 (신청을 막지 않게)
+    .appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
   // 픽업 완료 알림톡 (신청페이지 예약만, 같은 예약은 한 번만)
   if (state === '완료' && /^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) { try { alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); } }
   return { ok: true };

@@ -236,7 +236,7 @@ function ledgerFindEntry_(q) {
 function cancelReservation(input) {
   var q = parseCancelInput_(input);
   if (!q) return { ok: false, msg: '예약번호(예: ESD-261116-AB12) 또는 "날짜 번호"(예: 11/16 3)로 넣어 주세요.' };
-  var lock = LockService.getScriptLock();
+  var lock = ledgerLock_();
   if (!lock.tryLock(15000)) return { ok: false, msg: '잠시 뒤 다시 해 주세요 (다른 작업 중)' };
   try {
     var now = new Date(), stamp = Utilities.formatDate(now, 'Asia/Seoul', 'MM/dd HH:mm');

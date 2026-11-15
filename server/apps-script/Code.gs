@@ -153,7 +153,7 @@ function doPost(e) {
 function submit_(p) {
   var R = rules_(), T0 = Date.now(), srv = {};
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
+  if (!lock.tryLock(25000)) return { ok: false, error: 'busy' };
   try {
     var sh = sheet_(SHEET_BOOK, BOOK_HEADERS);
     ensureBookHeaders_(sh, BOOK_EXTRA_HEADERS);

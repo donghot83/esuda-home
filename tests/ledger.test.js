@@ -140,3 +140,12 @@ test('빠른 신청(DEFER_LEDGER=1): 응답 때는 예약 시트만, 장부는 �
   assert.strictEqual(env.ctx.syncLedgerPending().added, 1);
   assert.ok(names(env.ledger['11월 매입금액']).includes('신청고객'));
 });
+
+test('5분 자동 반영이 장부를 만지는 중이어도(문서 잠금) 고객 신청은 막히지 않음', () => {
+  const env = createEnv({ now: NOW, ledger: ledger(), props: { DEFER_LEDGER: '1' } });
+  env.setDocLocked(true);                                    // 장부 작업 중
+  assert.strictEqual(env.post(sub()).ok, true);              // 신청은 바로 확정
+  assert.strictEqual(env.ctx.syncLedgerPending().waiting, -1); // 장부 작업은 겹치지 않게 다음 차례로
+  env.setDocLocked(false);
+  assert.strictEqual(env.ctx.syncLedgerPending().added, 1);
+});
