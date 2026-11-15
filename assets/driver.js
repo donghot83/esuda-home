@@ -38,7 +38,7 @@
       $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
       st.date = r.date; st.items = r.items;
       $('dayLabel').textContent = r.label;
-      $('dayZone').textContent = r.weekend ? '주말 휴무' : r.zone;
+      $('dayZone').textContent = r.weekend ? '주말 휴무' : (r.route || r.zone + ' · 동선 확정 전(17시)');
       $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거 예약이 없어요.');
       render();
     }).catch(function () { st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });

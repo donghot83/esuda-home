@@ -50,11 +50,14 @@ function makeGrid(name, rows) {
         setBackground(v) { fit(r); rows[r - 1].bg = v; return rng; },
         setFontColor(v) { fit(r); rows[r - 1].fg = v; return rng; },
         setFontLine(v) { fit(r); rows[r - 1].line = v; return rng; },
-        copyTo() {}
+        copyTo() {},
+        _r: r
       };
       return rng;
     },
     deleteRow(r) { rows.splice(r - 1, 1); },
+    getMaxColumns() { return 26; },
+    moveRows(rng, dest) { const from = rng._r - 1, row = rows.splice(from, 1)[0]; rows.splice(dest - 1 > from ? dest - 2 : dest - 1, 0, row); },
     getName() { return name; },
     setName(n) { this.name = n; }
   };
@@ -117,6 +120,8 @@ function createEnv(opts = {}) {
       return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; } },
     ScriptApp: { getProjectTriggers: () => (opts.noTrigger ? [] : [{ getHandlerFunction: () => 'syncLedgerPending' }]) },
     Logger: { log() {} },
+    Maps: { newGeocoder: () => ({ setRegion() { return this; }, setLanguage() { return this; },
+      geocode: q => { const g = (opts.geo || {})[q]; return g ? { results: [{ geometry: { location: { lat: g[0], lng: g[1] } } }] } : { results: [] }; } }) },
     ContentService: {
       MimeType: { JSON: 'json' },
       createTextOutput: s => ({ text: s, setMimeType() { return this; } })
@@ -152,6 +157,7 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Report.gs'), 'utf8'), ctx, { filename: 'Report.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Driver.gs'), 'utf8'), ctx, { filename: 'Driver.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Alimtalk.gs'), 'utf8'), ctx, { filename: 'Alimtalk.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Route.gs'), 'utf8'), ctx, { filename: 'Route.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
     ctx, sheets, ledger: ledgerSheets, otherLedgers, props, created, drive, mails, fetches,

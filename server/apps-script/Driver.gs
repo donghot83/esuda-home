@@ -89,7 +89,8 @@ function driverList_(b) {
     }
   }
   var wd = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10))).getUTCDay();
-  return { ok: true, date: date, label: R_dateLabel_(date), zone: (+date.slice(8, 10)) % 2 ? '홀수일 · 한강 남쪽·김포' : '짝수일 · 한강 북쪽·일산·덕양',
+  var rd = PropertiesService.getScriptProperties().getProperty('ROUTE_DONE_' + date) || '';
+  return { ok: true, date: date, label: R_dateLabel_(date), route: rd ? ('동선 확정 ' + rd + ' · ' + ((+date.slice(8, 10)) % 2 ? '김포 → 강동' : '일산 → 광진')) : '', zone: (+date.slice(8, 10)) % 2 ? '홀수일 · 한강 남쪽·김포' : '짝수일 · 한강 북쪽·일산·덕양',
     weekend: R.CONFIG.closedWeekdays.indexOf(wd) >= 0, ledger: !!sh, items: items };
 }
 

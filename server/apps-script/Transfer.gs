@@ -161,7 +161,8 @@ function markTransferPaid(fileName) {
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('이수다')
-      .addItem('예약 취소 (예약번호)', 'menuCancel_')
+      .addItem('예약 취소 (예약번호 또는 날짜 번호)', 'menuCancel_')
+      .addItem('동선 짜기 (번호 확정)', 'menuRoute_')
       .addItem('현황판 새로 고침', 'menuDashboard_')
       .addItem('점검 메일 지금 보내기', 'menuReportNow_')
       .addItem('기사님 코드 보기·바꾸기', 'menuDriverKey_')
