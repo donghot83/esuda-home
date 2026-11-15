@@ -180,6 +180,8 @@
     renderDates();
   }
 
+  if (isLocal) window.__applyTest = { pickAddress: function (a) { pickAddress(a); } }; // 로컬 미리보기 시험용(운영 주소에선 없음)
+
   // ---------------- 날짜
   var WD = ['일', '월', '화', '수', '목', '금', '토'];
   function renderDates() {
@@ -253,6 +255,22 @@
     waitBox.hidden = !on; if (msg) $('waitMsg').textContent = msg;
   }
 
+  // ---------------- 신청 (2026-11-16: 확정 화면을 먼저 보여 주고 저장은 뒤에서 — 창을 닫아도 끝까지 전송)
+  function rand4() { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < 4; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
+  function saveBooking(p) {
+    var attempt = function (n) {
+      return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(p), keepalive: true })
+        .then(function (x) { if (!x.ok) throw new Error('http ' + x.status); return x.json(); })
+        .then(function (r) { if (r && !r.ok && r.error === 'busy' && n < 3) throw new Error('busy'); return r; })
+        .catch(function (e) {
+          if (n >= 3) throw e;
+          return new Promise(function (ok) { setTimeout(ok, 1500 * (n + 1)); }).then(function () { return attempt(n + 1); });
+        });
+    };
+    return attempt(0);
+  }
+  function setSave(cls, html) { var el = $('doneSave'); el.hidden = false; el.className = 'ap-save ' + cls; el.innerHTML = html; }
+
   $('applyForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (state.sending) return;
@@ -262,33 +280,61 @@
     if (!v.ok) { showErrors(v.errors); track('invalid', Object.keys(v.errors).sort().join(',')); return; }
     track('submit', state.photoMode === R.PHOTO_MODES[0] ? '사진 ' + photos.length + '장' : '');
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
-    var tStart = Date.now(), nPh = 0, tWaitPh = 0;
+    var tStart = Date.now(), want = state.photoMode === R.PHOTO_MODES[0] ? photos.length : 0;
     photosReady().then(function (ids) {
-      p.photoIds = ids; nPh = ids.length; tWaitPh = Date.now() - tStart;
-      showWait(true, '예약을 확정하고 있어요. 잠시만 기다려 주세요…');
-      return api('POST', p);
-    }).then(function (r) {
-      if (r && r.ok) {
-        TRK.done = true; track('done', r.reservationId);
-        // 고객 화면 기준 걸린 시간 + 서버 안에서 걸린 시간(나머지는 인터넷·구글 전달 시간)
-        track('t_confirm', '사진' + nPh + '장 ' + ((Date.now() - tStart) / 1000).toFixed(1) + '초 (사진대기 ' + (tWaitPh / 1000).toFixed(1) + '초, 서버 ' + ((r.srv && r.srv.total) / 1000 || 0).toFixed(1) + '초, 메일까지 ' + ((r.srv && r.srv.mail) / 1000 || 0).toFixed(1) + '초)');
-        var want = state.photoMode === R.PHOTO_MODES[0] ? photos.length : 0;
-        showDone(r, want ? { sent: r.photos || 0, total: want } : null); return;
-      }
-      if (r && r.error === 'invalid' && r.errors) {
-        if (r.errors.date) { state.date = ''; loadSchedule(); } // 그사이 마감된 날짜 → 달력 새로 고침
-        showErrors(r.errors); track('invalid', 'server:' + Object.keys(r.errors).sort().join(',')); return;
-      }
-      track('fail', r && r.error);
-      $('formError').textContent = r && r.error === 'busy' ? '신청이 몰리고 있어요. 잠시 후 다시 눌러 주세요.' : '저장하지 못했어요. 다시 눌러 주세요. 계속 안 되면 카카오채널로 신청해 주세요.';
-    }).catch(function () {
-      $('formError').textContent = '연결이 불안정해 저장을 확인하지 못했어요. 다시 눌러 주세요(중복 예약되지 않아요).';
-      track('fail', 'network');
+      p.photoIds = ids;
+      p.reservationIdHint = R.reservationId(p.date, rand4());
+      // 1) 확정 화면 즉시
+      showDone({ reservationId: p.reservationIdHint, date: p.date }, want ? { total: want, sent: ids.length, pending: true } : null);
+      setSave('wait', '⏳ 예약을 저장하고 있어요… <small>(이 창을 닫아도 저장돼요)</small>');
+      var tShown = Date.now();
+      track('t_shown', '사진' + ids.length + '장 ' + ((tShown - tStart) / 1000).toFixed(1) + '초');
+      // 2) 저장은 뒤에서
+      return saveBooking(p).then(function (r) {
+        if (r && r.ok) {
+          TRK.done = true; track('done', r.reservationId);
+          if (r.reservationId !== p.reservationIdHint) $('doneId').textContent = r.reservationId;
+          setSave('ok', '✓ 예약이 저장됐어요');
+          if (want) showPhotoLine(r.reservationId, r.photos || 0, want);
+          track('t_confirm', '사진' + ids.length + '장 ' + ((Date.now() - tStart) / 1000).toFixed(1) + '초 (화면 ' + ((tShown - tStart) / 1000).toFixed(1) + '초, 서버 ' + ((r.srv && r.srv.total) / 1000 || 0).toFixed(1) + '초)');
+          try { sessionStorage.removeItem('esuda_sub_id'); } catch (e) {}
+          return;
+        }
+        if (r && r.error === 'invalid' && r.errors) { // 드묾: 그사이 그날이 마감 등 → 신청 화면으로 돌아가 안내
+          $('doneView').hidden = true; $('formView').hidden = false;
+          if (r.errors.date) { state.date = ''; loadSchedule(); }
+          showErrors(r.errors);
+          $('formError').textContent = '방금 확인해 보니 신청을 마칠 수 없었어요. 빨간 글씨를 확인해 주세요.';
+          track('invalid', 'server:' + Object.keys(r.errors).sort().join(','));
+          return;
+        }
+        throw new Error(r && r.error || 'fail');
+      });
+    }).catch(function (e) {
+      track('fail', String(e && e.message || 'network'));
+      setSave('bad', '⚠️ 저장이 아직 확인되지 않았어요. <button type="button" id="btnRetrySave" class="ap-retry">다시 시도</button><br><small>계속 안 되면 카카오채널로 예약번호와 함께 알려 주세요.</small>');
+      var rb = $('btnRetrySave');
+      if (rb) rb.addEventListener('click', function () {
+        setSave('wait', '⏳ 다시 저장하는 중…');
+        saveBooking(p).then(function (r) {
+          if (r && r.ok) { TRK.done = true; track('done', r.reservationId); $('doneId').textContent = r.reservationId; setSave('ok', '✓ 예약이 저장됐어요'); if (want) showPhotoLine(r.reservationId, r.photos || 0, want); }
+          else setSave('bad', '⚠️ 저장하지 못했어요. 카카오채널로 예약번호와 함께 알려 주세요.');
+        }).catch(function () { setSave('bad', '⚠️ 인터넷 연결을 확인하고 다시 시도해 주세요.'); });
+      });
     }).then(function () {
       state.sending = false; $('btnSubmit').disabled = false; $('btnSubmit').textContent = '수거 신청하기';
       showWait(false);
     });
   });
+
+  function showPhotoLine(rid, sent, total) {
+    var dp = $('donePhoto'); dp.hidden = false;
+    if (sent >= total) { dp.textContent = '✅ 사진 ' + sent + '장이 함께 접수됐어요.'; return; }
+    track('photo_fail', sent + '/' + total);
+    dp.textContent = (sent ? '사진 ' + sent + '장만 접수됐어요. ' : '사진을 올리지 못했어요. ') + '카카오채널로 예약번호(' + rid + ')와 함께 옷 사진을 보내 주세요.';
+    $('doneKakao').textContent = '카카오채널로 사진 보내기'; $('doneKakao').className = 'ap-submit'; $('doneKakao').style.display = 'flex';
+    $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';
+  }
 
   function showDone(r, up) {
     var dt = R.parseYmd(r.date);
@@ -296,9 +342,8 @@
     $('doneDate').textContent = (dt.getUTCMonth() + 1) + '월 ' + dt.getUTCDate() + '일 (' + WD[dt.getUTCDay()] + ')';
     $('doneAddr').textContent = (state.address ? state.address.roadAddress : '') + ' ' + $('addrDetail').value;
     var later = !(up && up.pending) && (state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length));
-    if (up && up.total && up.sent === up.total) { $('donePhoto').hidden = false; $('donePhoto').textContent = '✅ 사진 ' + up.sent + '장이 함께 접수됐어요.'; }
     var dp = $('donePhoto');
-    if (up && up.sent === up.total) { dp.hidden = false; dp.textContent = '사진 ' + up.sent + '장이 함께 접수됐어요.'; }
+    if (up && up.pending) { dp.hidden = false; dp.textContent = '📷 사진 ' + up.sent + '장을 함께 접수하는 중이에요.'; }
     if (later) {
       dp.hidden = false;
       dp.textContent = (up && up.sent < up.total ? '사진 일부를 올리지 못했어요. ' : '') + '카카오채널로 예약번호(' + r.reservationId + ')와 함께 옷 사진을 보내 주세요.';
@@ -306,7 +351,6 @@
       $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';
     }
     $('formView').hidden = true; $('doneView').hidden = false;
-    try { sessionStorage.removeItem('esuda_sub_id'); } catch (e) {}
     window.scrollTo(0, 0);
   }
 })();

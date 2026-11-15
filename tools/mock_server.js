@@ -22,8 +22,17 @@ const env = createEnv({ staffToken: 'local-test-token', props: { DRIVER_KEY: 'LO
 env.get({ action: 'schedule' }); // 시트 만들기
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };
 
+let MOCK_DELAY = 0, MOCK_FAIL = '';  // 로컬 시험용: 서버 지연(ms)·실패 흉내
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
+  if (u.pathname === '/assets/apply-config.js') { // 로컬에선 가짜 서버(/api)로
+    res.writeHead(200, { 'Content-Type': 'text/javascript' });
+    return res.end("window.ESUDA_APPLY = { apiUrl: '', kakaoUrl: 'https://pf.kakao.com/_DxoHVG/chat' };");
+  }
+  if (u.pathname === '/api' && u.searchParams.get('action') === 'mockSet') {
+    MOCK_DELAY = +u.searchParams.get('delay') || 0; MOCK_FAIL = u.searchParams.get('fail') || '';
+    res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"ok":true}');
+  }
   if (u.pathname === '/api') {
     if (req.method === 'GET' && u.searchParams.get('action') === 'mockClose') {
       env.sheet('마감').appendRow([u.searchParams.get('date'), u.searchParams.get('end') || '', u.searchParams.get('zone') || 'all', u.searchParams.get('msg') || '', 'mock']);
@@ -39,9 +48,14 @@ http.createServer((req, res) => {
     let body = '';
     req.on('data', c => (body += c));
     req.on('end', () => {
-      let out;
-      try { out = JSON.parse(env.ctx.doPost({ postData: { contents: body } }).text); } catch (e) { out = { ok: false, error: 'server_error' }; }
-      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(out));
+      setTimeout(() => {
+        let out;
+        const isSubmit = /"action":"submit"/.test(body);
+        if (isSubmit && MOCK_FAIL === 'network') { res.destroy(); return; }
+        if (isSubmit && MOCK_FAIL === 'full') { out = { ok: false, error: 'invalid', errors: { date: '선택한 날짜는 예약이 다 찼어요. 다른 날짜를 골라 주세요.' } }; }
+        else { try { out = JSON.parse(env.ctx.doPost({ postData: { contents: body } }).text); } catch (e) { out = { ok: false, error: 'server_error' }; } }
+        res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(out));
+      }, /"action":"submit"/.test(body) ? MOCK_DELAY : 0);
     });
     return;
   }

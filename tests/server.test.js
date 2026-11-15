@@ -115,3 +115,15 @@ test('당일 예약: 서버도 한국 시간 오후 5시 이후 당일 신청을
   const r = after.post(good());
   assert.strictEqual(r.ok, false); assert.match(r.errors.date, /오후 5시/);
 });
+
+test('화면에서 먼저 보여 준 예약번호(reservationIdHint)를 그대로 씀, 형식·날짜가 틀리거나 겹치면 새 번호', () => {
+  const env = createEnv({ now: NOW });
+  const a = env.post(good({ reservationIdHint: 'ESD-261118-AB12' }));
+  assert.strictEqual(a.reservationId, 'ESD-261118-AB12');
+  const b = env.post(good({ reservationIdHint: 'ESD-261118-AB12' }));      // 겹침
+  assert.notStrictEqual(b.reservationId, 'ESD-261118-AB12');
+  const c = env.post(good({ reservationIdHint: 'ESD-261120-ZZ99' }));      // 날짜 다름
+  assert.match(c.reservationId, /^ESD-261118-/); assert.notStrictEqual(c.reservationId, 'ESD-261120-ZZ99');
+  const d = env.post(good({ reservationIdHint: '<script>' }));
+  assert.match(d.reservationId, /^ESD-261118-[A-Z0-9]{4}$/);
+});

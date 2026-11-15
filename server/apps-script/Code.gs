@@ -174,8 +174,10 @@ function submit_(p) {
     var c = v.clean;
     var ids = {};
     for (var k = 1; k < data.length; k++) ids[String(data[k][cId])] = true;
-    var rid;
-    do { rid = R.reservationId(c.date, rand4_()); } while (ids[rid]);
+    // 2026-11-16: 확정 화면에 먼저 보여 준 예약번호를 그대로 씀 (형식·날짜가 맞고 안 겹칠 때)
+    var hint = String(p.reservationIdHint || '').toUpperCase(), rid;
+    if (/^ESD-\d{6}-[A-Z0-9]{4}$/.test(hint) && hint.slice(4, 10) === c.date.slice(2).replace(/-/g, '') && !ids[hint]) rid = hint;
+    else do { rid = R.reservationId(c.date, rand4_()); } while (ids[rid]);
     var now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
     var row = {
       '예약번호': rid, '확정상태': '확정', '장부반영': '대기', '장부반영시각': '', '수거일': c.date, '구역': c.zone, '신청시각': now,
