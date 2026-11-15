@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>기사님 수거 목록 | 이수다</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../assets/driver.css?v=1">
+</head>
+<body>
+<header class="dv-head">
+  <b>이수다 수거 목록</b>
+  <button type="button" id="btnRefresh" class="dv-ghost" hidden>새로고침</button>
+</header>
+
+<main class="dv-main" id="keyView" hidden>
+  <section class="dv-card">
+    <h1>기사님 코드를 넣어 주세요</h1>
+    <p class="dv-sub">대표님께 받은 코드예요. 한 번 넣으면 이 휴대폰에 기억돼요.</p>
+    <input id="keyInput" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="예: AB12CD34EF">
+    <p class="dv-err" id="keyErr"></p>
+    <button type="button" id="btnKey" class="dv-main-btn">확인</button>
+  </section>
+</main>
+
+<main class="dv-main" id="listView" hidden>
+  <div class="dv-day">
+    <button type="button" id="btnPrev" class="dv-ghost">◀ 전날</button>
+    <div class="dv-day-t"><b id="dayLabel"></b><small id="dayZone"></small></div>
+    <button type="button" id="btnNext" class="dv-ghost">다음날 ▶</button>
+  </div>
+  <div class="dv-sum" id="sum"></div>
+  <div class="dv-sort">
+    <button type="button" data-sort="ledger" class="on">장부 순서</button>
+    <button type="button" data-sort="area">동네끼리</button>
+    <button type="button" data-sort="todo">남은 것 먼저</button>
+  </div>
+  <p class="dv-sub" id="msg"></p>
+  <ol class="dv-list" id="list"></ol>
+  <button type="button" id="btnLogout" class="dv-link">코드 다시 넣기</button>
+</main>
+
+<script src="../assets/apply-config.js?v=3"></script>
+<script src="../assets/driver.js?v=1"></script>
+</body>
+</html>

@@ -158,6 +158,7 @@ function onOpen() {
       .addItem('예약 취소 (예약번호)', 'menuCancel_')
       .addItem('현황판 새로 고침', 'menuDashboard_')
       .addItem('점검 메일 지금 보내기', 'menuReportNow_')
+      .addItem('기사님 코드 보기·바꾸기', 'menuDriverKey_')
       .addSeparator()
       .addItem('신한 다건이체 파일 만들기', 'menuMakeTransfer_')
       .addItem('이체 파일 입금완료 처리', 'menuMarkPaid_')

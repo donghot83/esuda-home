@@ -8,7 +8,15 @@ const { createEnv } = require('../tests/gas-harness.js');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = +process.env.PORT || 8787;
-const env = createEnv({ staffToken: 'local-test-token' });
+// 기사님 화면 미리보기용 가상 장부 (가상 데이터만) — 기사님 코드: LOCALTEST1
+const D = s => new Date(s + 'T00:00:00+09:00');
+const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const env = createEnv({ staffToken: 'local-test-token', props: { DRIVER_KEY: 'LOCALTEST1' }, ledger: {
+  [(+today.slice(5, 7)) + '월 매입금액']: [
+    [null, '날짜', '이름', '지역구', '주소', '무게', '로스', '최종', '금액', '로스금액', null],
+    [null, D(today), '가상카톡', '은평구', '가상로 12 301호', null, null, null, null, null, '카톡 예약 / 비번 #1234'],
+    [null, D(today), '가상직원', '마포구', '가상북로 5 2층', null, null, null, null, null, '']
+  ] } });
 env.get({ action: 'schedule' }); // 시트 만들기
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };
 

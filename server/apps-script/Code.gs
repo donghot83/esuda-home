@@ -136,6 +136,8 @@ function doPost(e) {
   try {
     if (body.action === 'submit') return json_(submit_(body));
     if (body.action === 'photo') return json_(photo_(body));
+    if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
+    if (body.action === 'driverMark') return json_(driverMark_(body));
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만
     if (body.action === 'markSynced') return json_(markSynced_(body.token, body.ids));
     return json_({ ok: false, error: 'unknown_action' });
