@@ -212,6 +212,7 @@ function cancelReservation(rid) {
         for (var g = 1; g <= LEDGER_GAP && k - g >= 1 && blank(k - g); g++) { f.sheet.deleteRow(f.row - g); extra++; }
       }
       bumpLedgerCount_(date, -1);
+      try { var lssC = ledgerOpen_(date); renumberLedgerDate_(f.sheet, date, lssC.getSpreadsheetTimeZone() || 'GMT'); } catch (e) {}
       msgs.push('장부: ' + f.row + '행을 지웠어요' + (extra ? ' (그날 다른 예약이 없어 빈 줄 ' + extra + '칸도 정리)' : ''));
     }
     return { ok: true, msg: rid + ' 취소 처리\n' + msgs.join('\n') };
@@ -282,8 +283,11 @@ function setupHelpers() {
   ScriptApp.newTrigger('syncLedgerPending').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('dailyReport').timeBased().atHour(18).everyDays(1).inTimezone('Asia/Seoul').create();
   var fixed = tidyLedgerDateFormats_();
+  try { renumberUpcoming(); } catch (e) {}
   refreshLedgerCounts_();
   var chk = refreshDashboard();
   ss.setActiveSheet(ss.getSheetByName(SHEET_DASH)); ss.moveActiveSheet(1);
   Logger.log('도우미 설치 완료 / 장부 날짜 모양 맞춤 ' + fixed + '칸 / 점검 확인필요 ' + chk.issues.length + '건: ' + chk.issues.join(' | '));
 }
+
+function menuRenumber_() { var n = renumberUpcoming(); SpreadsheetApp.getUi().alert(n + '개 날짜의 번호를 1, 2, 3 … 으로 다시 매겼어요.'); }

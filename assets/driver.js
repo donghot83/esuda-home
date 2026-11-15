@@ -66,7 +66,7 @@
       var tel = String(it.phone || '').replace(/[^0-9]/g, '');
       var map = 'https://map.naver.com/p/search/' + encodeURIComponent(it.map || (it.area + ' ' + it.addr));
       return '<li class="dv-item' + cls + '" data-id="' + esc(it.id) + '">' +
-        '<div class="dv-top"><span class="dv-no">' + (it._i + 1) + '</span><span class="dv-name">' + esc(it.name) + '</span><span class="dv-area">' + esc(it.area) + '</span><span class="dv-src">' + esc(it.src) + '</span></div>' +
+        '<div class="dv-top"><span class="dv-no">' + esc(it.no || (it._i + 1)) + '</span><span class="dv-name">' + esc(it.name) + '</span><span class="dv-area">' + esc(it.area) + '</span><span class="dv-src">' + esc(it.src) + '</span></div>' +
         '<div class="dv-addr">' + esc(it.road || it.addr) + '</div>' + rows +
         '<div class="dv-btns">' +
           (tel ? '<a href="tel:' + tel + '">📞 전화</a><a href="sms:' + tel + '">💬 문자</a>' : '<a aria-disabled="true" style="opacity:.35">📞 전화</a><a aria-disabled="true" style="opacity:.35">💬 문자</a>') +

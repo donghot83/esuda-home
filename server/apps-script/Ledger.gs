@@ -125,8 +125,38 @@ function ledgerAppend_(c, rid) {
   sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
   sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.memo ? ' / ' + c.memo : ''));
+  try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
   bumpLedgerCount_(c.date, 1);
   return { ok: true, row: at };
+}
+
+/**
+ * 그날 장부 줄 왼쪽(A열)에 1, 2, 3 … 번호 매기기 (2026-11-15 대표 요청: 몇 건인지 바로 보이게, 봉투 번호와 맞추기)
+ * 이름이 있는 그날 줄을 위에서부터 순서대로. 지난 날짜는 건드리지 않음(오늘 이후만).
+ */
+function renumberLedgerDate_(sh, dateStr, tz) {
+  if (!sh) return 0;
+  var v = sh.getDataRange().getValues(), n = 0;
+  for (var i = 1; i < v.length; i++) {
+    if (cellYmd_(v[i][LEDGER_COL.date - 1], tz) !== dateStr) continue;
+    if (!String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;
+    n++;
+    if (String(v[i][LEDGER_COL.no - 1]) !== String(n)) sh.getRange(i + 1, LEDGER_COL.no).setValue(n);
+  }
+  return n;
+}
+
+/** 오늘부터 앞으로의 날짜 번호 전부 다시 매기기 (메뉴·설치용) */
+function renumberUpcoming() {
+  var R = rules_(), today = R.todayKST(new Date()), done = {}, count = 0;
+  [0, 31, 62].forEach(function (k) {
+    var d0 = R.addDays(today, k), lss = ledgerOpen_(d0), sh = lss && ledgerMonthSheet_(lss, d0);
+    if (!sh || done[sh.getName()]) return; done[sh.getName()] = 1;
+    var tz = lss.getSpreadsheetTimeZone() || 'GMT', dates = {};
+    sh.getDataRange().getValues().forEach(function (r) { var d = cellYmd_(r[LEDGER_COL.date - 1], tz); if (d && d >= today) dates[d] = 1; });
+    Object.keys(dates).forEach(function (d) { renumberLedgerDate_(sh, d, tz); count++; });
+  });
+  return count;
 }
 
 /** 장부에서 예약번호 줄 찾기 → {sheet, row(1-based), weight} | null */

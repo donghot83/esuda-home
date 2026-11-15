@@ -165,6 +165,7 @@ function onOpen() {
       .addItem('현황판 새로 고침', 'menuDashboard_')
       .addItem('점검 메일 지금 보내기', 'menuReportNow_')
       .addItem('기사님 코드 보기·바꾸기', 'menuDriverKey_')
+      .addItem('장부 번호 다시 매기기 (오늘 이후)', 'menuRenumber_')
       .addSeparator()
       .addItem('신한 다건이체 파일 만들기', 'menuMakeTransfer_')
       .addItem('이체 파일 입금완료 처리', 'menuMarkPaid_')

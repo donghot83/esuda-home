@@ -68,7 +68,7 @@ function driverList_(b) {
       var area = String(v[i][LEDGER_COL.area - 1] || '').trim(), addr = String(v[i][LEDGER_COL.addr - 1] || '').trim();
       var memo = String(v[i][LEDGER_COL.memo - 1] || '');
       var m = /ESD-\d{6}-[A-Z0-9]{4}/.exec(memo), rid = m ? m[0] : '';
-      var it = { id: rid || ('K:' + name + '|' + addr), rid: rid, name: name, area: area, addr: addr, memo: memo.replace(/^ESD-\d{6}-[A-Z0-9]{4} 신청페이지 \/ /, ''),
+      var it = { no: v[i][LEDGER_COL.no - 1] || '', id: rid || ('K:' + name + '|' + addr), rid: rid, name: name, area: area, addr: addr, memo: memo.replace(/^ESD-\d{6}-[A-Z0-9]{4} 신청페이지 \/ /, ''),
         map: driverMapQuery_(area, addr), src: rid ? '신청페이지' : '카톡·직원' };
       var br = rid && byRid[rid];
       if (br) {
