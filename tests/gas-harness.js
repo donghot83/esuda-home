@@ -29,7 +29,27 @@ function makeGrid(name, rows) {
     getDataRange() { return { getValues: () => rows.map(r => r.slice()) }; },
     insertRowsAfter(r, n) { fit(r); rows.splice(r, 0, ...Array.from({ length: n }, () => [])); },
     insertRowsBefore(r, n) { fit(r - 1); rows.splice(r - 1, 0, ...Array.from({ length: n }, () => [])); },
-    getRange(r, c) { return { setValue(v) { fit(r); rows[r - 1][c - 1] = v; }, copyTo() {} }; }
+    getRange(r, c, nr, nc) {
+      const rng = {
+        setValue(v) { fit(r); rows[r - 1][c - 1] = v; return rng; },
+        setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => { fit(r + i); rows[r - 1 + i][c - 1 + j] = v; })); return rng; },
+        setNumberFormat() { return rng; },
+        copyTo() {}
+      };
+      return rng;
+    },
+    setName(n) { this.name = n; }
+  };
+}
+
+function makeSpreadsheet(name) {
+  const sheets = [makeGrid('Sheet1')];
+  return {
+    name, sheets,
+    getSheets: () => sheets,
+    insertSheet: n => { const g = makeGrid(n); sheets.push(g); return g; },
+    getSheetByName: n => sheets.find(s => s.name === n) || null,
+    getUrl: () => 'https://docs.google.com/fake/' + encodeURIComponent(name)
   };
 }
 
@@ -38,6 +58,7 @@ function createEnv(opts = {}) {
   const props = { STAFF_TOKEN: opts.staffToken || 'test-token' };
   if (opts.ledger) props.LEDGER_ID = 'LEDGER';
   const ledgerSheets = {};
+  const created = [];
   Object.entries(opts.ledger || {}).forEach(([n, rows]) => { ledgerSheets[n] = makeGrid(n, rows); });
   if (opts.ledgerFail) props.LEDGER_ID = 'LEDGER';
   let locked = false;
@@ -53,6 +74,7 @@ function createEnv(opts = {}) {
         return { getSheetByName: n => ledgerSheets[n] || null, getSpreadsheetTimeZone: () => opts.ledgerTz || 'Asia/Seoul' };
       },
       CopyPasteType: { PASTE_FORMAT: 'format' },
+      create: n => { const s = makeSpreadsheet(n); created.push(s); return s; },
       flush() {}
     },
     LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }) },
@@ -82,9 +104,10 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Rules.gs'), 'utf8'), ctx, { filename: 'Rules.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Ledger.gs'), 'utf8'), ctx, { filename: 'Ledger.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Transfer.gs'), 'utf8'), ctx, { filename: 'Transfer.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
-    ctx, sheets, ledger: ledgerSheets,
+    ctx, sheets, ledger: ledgerSheets, created,
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],
