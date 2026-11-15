@@ -97,14 +97,16 @@
       .then(function () { renderPhotos(); clearErr('photo'); }).catch(function () { renderPhotos(); setErr('photo', '사진을 읽지 못했어요. 다른 사진을 고르거나, "나중에 카톡으로 보낼게요"를 골라 주세요.'); track('photo_read_fail', ''); });
   });
   function uploadPhotos(r, p) {
-    var list = photos.slice(), done = 0;
-    return list.reduce(function (chain, d, i) {
-      return chain.then(function () {
-        var dp = $('donePhoto'); dp.hidden = false; dp.textContent = '📷 사진 올리는 중… (' + (i + 1) + '/' + list.length + ') — 이 화면을 잠시 닫지 말아 주세요.';
-        return api('POST', { action: 'photo', reservationId: r.reservationId, submissionId: p.submissionId, index: i + 1, data: d.split(',')[1] })
-          .then(function (x) { if (x && x.ok) done++; }).catch(function () {});
-      });
-    }, Promise.resolve()).then(function () { return { sent: done, total: list.length }; });
+    // 2026-11-16: 한 장씩(장당 약 5초) → 동시에 올리기, 실패한 장은 한 번 더
+    var list = photos.slice(), done = 0, dp = $('donePhoto');
+    var show = function () { dp.hidden = false; dp.textContent = '📷 사진 올리는 중… (' + done + '/' + list.length + '장 완료) — 이 화면을 잠시 닫지 말아 주세요.'; };
+    show();
+    var send = function (d, i) { return api('POST', { action: 'photo', reservationId: r.reservationId, submissionId: p.submissionId, index: i + 1, data: d.split(',')[1] }); };
+    return Promise.all(list.map(function (d, i) {
+      return send(d, i).then(function (x) { if (!(x && x.ok)) throw new Error('fail'); })
+        .catch(function () { return send(d, i).then(function (x) { if (!(x && x.ok)) throw new Error('fail'); }); })
+        .then(function () { done++; show(); }).catch(function () {});
+    })).then(function () { return { sent: done, total: list.length }; });
   }
 
   // 계좌 없이 무상수거 체크 → 계좌 칸 숨김 (2026-11-16)
@@ -247,13 +249,20 @@
     track('submit', state.photoMode === R.PHOTO_MODES[0] ? '사진 ' + photos.length + '장' : '');
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
     showWait(true, '예약을 확정하고 있어요. 잠시만 기다려 주세요…');
+    var tStart = Date.now();
     api('POST', p).then(function (r) {
       if (r && r.ok) {
         TRK.done = true; track('done', r.reservationId);
+        var nPh = state.photoMode === R.PHOTO_MODES[0] ? photos.length : 0;
+        track('t_confirm', '사진' + nPh + '장 ' + ((Date.now() - tStart) / 1000).toFixed(1) + '초');
         // 확정 화면을 먼저 보여 주고, 사진은 그 화면에서 올림 (2026-11-16: 사진 때문에 오래 기다리던 문제)
         if (state.photoMode === R.PHOTO_MODES[0] && photos.length) {
           showDone(r, { pending: true });
-          uploadPhotos(r, p).then(function (u) { showPhotoResult(r, u); });
+          var tPh = Date.now();
+          uploadPhotos(r, p).then(function (u) {
+            showPhotoResult(r, u);
+            track('t_photo', u.sent + '/' + u.total + '장 ' + ((Date.now() - tPh) / 1000).toFixed(1) + '초 (확정 후)');
+          });
           return;
         }
         showDone(r); return;

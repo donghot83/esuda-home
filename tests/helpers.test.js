@@ -193,3 +193,13 @@ test('방문 단계 기록: track 은 개인정보 없이 한 줄씩 쌓이고, 
   assert.match(body, /중간에 나간 곳: 주소 선택 뒤 1/);
   assert.match(body, /받지 않는 지역 주소: 인천 부평구 1/);
 });
+
+test('걸린 시간 기록: 확정·사진 올리기 시간을 사진 장수별 평균·최대로 점검 메일에 요약', () => {
+  const env = createEnv({ now: NOW, ledger: ledger(), notify: 'boss@example.com' });
+  env.post({ action: 'track', sid: 'a1', step: 't_confirm', info: '사진0장 2.8초' });
+  env.post({ action: 'track', sid: 'a2', step: 't_confirm', info: '사진0장 3.4초' });
+  env.post({ action: 'track', sid: 'a3', step: 't_photo', info: '2/2장 9.5초 (확정 후)' });
+  env.ctx.dailyReport();
+  const body = env.mails[env.mails.length - 1].body;
+  assert.match(body, /걸린 시간\(평균, 최대\): 사진 올리기 2\/2장 9\.5초·9\.5초\(1건\), 확정 사진0장 3\.1초·3\.4초\(2건\)/);
+});

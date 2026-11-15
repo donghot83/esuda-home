@@ -380,7 +380,7 @@ function track_(b) {
 /** 그날 방문 단계 요약 */
 function visitSummary_(date) {
   var sh = ss_().getSheetByName(SHEET_VISIT);
-  var out = { visits: 0, steps: {}, errors: {}, leaves: {}, out: {}, dev: {}, text: '■ 신청 화면 방문: 기록 없음' };
+  var out = { visits: 0, steps: {}, errors: {}, leaves: {}, out: {}, dev: {}, times: {}, text: '■ 신청 화면 방문: 기록 없음' };
   if (!sh) return out;
   var seen = {};
   sh.getDataRange().getValues().slice(1).forEach(function (r) {
@@ -390,6 +390,7 @@ function visitSummary_(date) {
     if (st === 'open') { out.visits++; out.dev[r[4]] = (out.dev[r[4]] || 0) + 1; }
     if (st === 'invalid') info.replace(/^server:/, '').split(',').forEach(function (f) { if (f) out.errors[f] = (out.errors[f] || 0) + 1; });
     if (st === 'leave') out.leaves[info] = (out.leaves[info] || 0) + 1;
+    if (st === 't_confirm' || st === 't_photo') { var tm = /([\d.]+)초/.exec(info), nm = /^(사진\d+장|\d+\/\d+장)/.exec(info); if (tm) { var key = (st === 't_confirm' ? '확정 ' : '사진 올리기 ') + (nm ? nm[1] : ''); (out.times[key] = out.times[key] || []).push(+tm[1]); } }
     if (st === 'addr' && info && info !== 'ok') out.out[info] = (out.out[info] || 0) + 1;
   });
   Object.keys(seen).forEach(function (k) { var st = k.split('|')[1]; out.steps[st] = (out.steps[st] || 0) + 1; });
@@ -401,6 +402,7 @@ function visitSummary_(date) {
   var ph = (out.steps.photo_fail || 0) + (out.steps.photo_read_fail || 0);
   out.text = '■ 신청 화면 (오늘, 사람 수): ' + fun +
     (errs ? '\n   - 많이 틀린 칸: ' + errs : '') + (lv ? '\n   - 중간에 나간 곳: ' + lv : '') + (ar ? '\n   - 받지 않는 지역 주소: ' + ar : '') +
-    (out.steps.nodate ? '\n   - 고를 날짜가 없던 사람: ' + out.steps.nodate : '') + (ph ? '\n   - 사진 문제: ' + ph + '명' : '');
+    (out.steps.nodate ? '\n   - 고를 날짜가 없던 사람: ' + out.steps.nodate : '') + (ph ? '\n   - 사진 문제: ' + ph + '명' : '') +
+    (Object.keys(out.times).length ? '\n   - 걸린 시간(평균, 최대): ' + Object.keys(out.times).sort().map(function (k) { var a = out.times[k], avg = a.reduce(function (x, y) { return x + y; }, 0) / a.length; return k + ' ' + avg.toFixed(1) + '초·' + Math.max.apply(null, a).toFixed(1) + '초(' + a.length + '건)'; }).join(', ') : '');
   return out;
 }
