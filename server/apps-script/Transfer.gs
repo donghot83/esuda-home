@@ -19,9 +19,11 @@ var BANK_CODES = {
   '케이뱅크': '089', '씨티은행': '027', '산림조합': '064', '저축은행': '050'
 };
 
-// 업로드용 시트 열 순서 (신한 BizBank 샘플 양식 확인 후 맞출 것)
-var TRANSFER_COLUMNS = ['은행코드', '계좌번호', '금액', '받는분통장표시', '내통장표시'];
-var TRANSFER_SENDER_MEMO = '이수다매입';   // 고객 통장에 찍힐 글자 (짧게)
+// 업로드용 시트 열 순서 = 신한 BizBank '자금이체 등록 > 파일불러오기' 지정 필드 순서
+// (신한은행 '기업인터넷뱅킹 대량이체(급여이체)' 안내서: 입금은행, 입금계좌, 고객관리성명, 입금액, 출금통장표시, 입금통장표시)
+// 입금은행은 반드시 은행코드 3자리, 입금통장표시는 최대 7자. 첫 행(항목명)은 불러올 때 '첫 행 제외' 체크.
+var TRANSFER_COLUMNS = ['입금은행', '입금계좌', '고객관리성명', '입금액', '출금통장표시', '입금통장표시'];
+var TRANSFER_SENDER_MEMO = '이수다매입';   // 입금통장표시: 고객 통장에 찍힐 글자 (최대 7자)
 var TRANSFER_EXTRA_HEADERS = ['이체파일', '지급상태', '입금완료일'];  // 예약 시트 끝에 덧붙이는 열
 
 function transferUnitPrice_() {
@@ -96,7 +98,8 @@ function makeTransferFile(opts) {
       if (!code || acct.length < 9) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
       var holder = String(r[col('예금주')] || r[col('이름')]);
       var rec = { '은행코드': code, '은행명': bank, '계좌번호': acct, '금액': pa.amount, '예금주': holder,
-        '받는분통장표시': TRANSFER_SENDER_MEMO, '내통장표시': holder.slice(0, 7), '예약번호': rid, '수거일': date,
+        '입금은행': code, '입금계좌': acct, '고객관리성명': holder, '입금액': pa.amount,
+        '출금통장표시': holder.slice(0, 7), '입금통장표시': TRANSFER_SENDER_MEMO.slice(0, 7), '예약번호': rid, '수거일': date,
         '무게': lr.weight, '로스': lr.loss || '', '금액근거': pa.source, '장부행': lr.row };
       rows.push(TRANSFER_COLUMNS.map(function (h) { return rec[h]; }));
       check.push(rec); total += pa.amount;
@@ -157,7 +160,7 @@ function menuMakeTransfer_() {
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
   var msg = '이체 대상 ' + r.count + '건, 합계 ' + r.total.toLocaleString() + '원\n무상수거 ' + r.free + '건';
   if (r.skipped.length) msg += '\n\n확인 필요 ' + r.skipped.length + '건:\n' + r.skipped.map(function (s) { return s.예약번호 + ' - ' + s.이유; }).join('\n');
-  if (r.url) msg += '\n\n파일: ' + r.url + '\n→ 파일 > 다운로드 > Microsoft Excel 로 받아 신한 BizBank 대량이체에 올려 주세요.';
+  if (r.url) msg += '\n\n파일: ' + r.url + '\n→ 파일 > 다운로드 > Microsoft Excel 로 받아 신한 BizBank 이체 > 대량이체 > 자금이체 등록 > 파일불러오기 (첫 행 제외 체크)';
   ui.alert(msg);
 }
 function menuMarkPaid_() {
