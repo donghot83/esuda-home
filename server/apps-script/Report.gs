@@ -73,7 +73,7 @@ function runChecks_() {
   Object.keys(months).sort().forEach(function (ym) {
     var d1 = ym + '-01', y = ym.slice(0, 4), m = +ym.slice(5, 7);
     if (!ledgerIdFor_(d1)) {
-      if (!seen['y' + y]) { seen['y' + y] = 1; issues.push(y + '년 예약도 받기 시작했어요(달력 60일). ' + y + '년 장부를 만들면 연결해야 해요 — 그때까지 ' + y + '년 예약은 장부 대신 예약 시트에만 있고, 이 메일로 계속 알려 드려요.'); }
+      if (!seen['y' + y]) { seen['y' + y] = 1; issues.push(y + '년 예약도 받기 시작했어요(달력 ' + R.CONFIG.horizonDays + '일). ' + y + '년 장부를 만들면 연결해야 해요 — 그때까지 ' + y + '년 예약은 장부 대신 예약 시트에만 있고, 이 메일로 계속 알려 드려요.'); }
       return;
     }
     try { var l = ledgerOpen_(d1); if (l && !ledgerMonthSheet_(l, d1)) issues.push('장부에 "' + m + '월 매입금액" 시트가 아직 없어요. 만들어 두면 ' + m + '월 예약이 자동으로 들어가요.'); } catch (e) {}

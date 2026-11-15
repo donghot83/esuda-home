@@ -42,7 +42,7 @@ test('날짜: 남쪽은 홀수일만, 북쪽은 짝수일만, 주말·지난날 
   assert.strictEqual(R.checkDate('2026-11-18', 'north', o).open, true);   // 수 18 짝수
   assert.strictEqual(R.checkDate('2026-11-15', 'south', o).reason, 'weekend'); // 일 15 홀수지만 주말
   assert.strictEqual(R.checkDate('2026-11-10', 'north', o).reason, 'past');
-  assert.strictEqual(R.checkDate('2027-02-01', 'south', o).reason, 'horizon'); // 약 두 달 뒤까지만 달력 표시
+  assert.strictEqual(R.checkDate('2026-12-29', 'south', o).reason, 'horizon'); // 30일 뒤까지만 달력 표시
   assert.strictEqual(R.checkDate('2026-02-30', 'south', o).reason, 'invalid');
 });
 
@@ -89,9 +89,9 @@ test('마감: 직원이 지정한 날짜·기간·구역이 닫히고 안내 문
   assert.strictEqual(R.checkDate('2026-11-25', 'south', o).open, true); // 남쪽은 그 기간에도 열림
 });
 
-test('달력: 오늘부터 60일 뒤까지(61일치), 열린 날은 모두 같은 홀짝', () => {
+test('달력: 오늘부터 30일 뒤까지(31일치), 열린 날은 모두 같은 홀짝', () => {
   const cal = R.calendar('south', { today: TODAY });
-  assert.strictEqual(cal.length, 61);
+  assert.strictEqual(cal.length, 31);
   assert.strictEqual(cal[0].date, TODAY);
   cal.filter(d => d.open).forEach(d => assert.strictEqual(+d.date.slice(8) % 2, 1));
   assert.ok(cal.some(d => d.open));

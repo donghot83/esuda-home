@@ -31,8 +31,8 @@ const names = sh => sh.rows.map(r => (r && r[2]) || '');
 const book = env => { const b = env.sheet('예약').rows; return { h: b[0], rows: b, get: (i, k) => b[i][b[0].indexOf(k)] }; };
 
 test('연도 넘김: 2027년 1월 예약은 26년 장부(1월 시트)에 절대 안 들어가고 대기 → 27년 장부를 연결하면 그쪽에 들어감', () => {
-  const env = createEnv({ now: NOW, ledger: ledger() });
-  const r = env.post(sub({ date: '2027-01-04' })); // 월요일·짝수일, 오늘부터 50일
+  const env = createEnv({ now: '2026-12-20T01:00:00Z', ledger: ledger() }); // 한국 12/20(일) — 달력 30일이라 12월부터 2027년 날짜가 열림
+  const r = env.post(sub({ date: '2027-01-04' })); // 월요일·짝수일, 오늘부터 15일
   assert.strictEqual(r.ok, true, JSON.stringify(r));
   assert.strictEqual(book(env).get(1, '장부반영'), '대기');
   assert.deepStrictEqual(names(env.ledger['1월매입입금']), ['이름', '작년1월']); // 2026년 1월 시트 그대로
@@ -122,7 +122,10 @@ test('매일 점검 메일: 정상 항목과 확인 필요(12월 시트 없음·
   assert.match(m.subject, /^\[이수다 매일 점검\] 11\/15\(일\) ⚠️ 확인 필요/);
   assert.match(m.body, /홀짝 규칙: 남쪽=홀수일, 북쪽=짝수일 모두 맞음/);
   assert.match(m.body, /12월 매입금액" 시트가 아직 없어요/);
-  assert.match(m.body, /2027년 예약도 받기 시작/);
+  assert.ok(!/2027년 예약도 받기 시작/.test(m.body)); // 11/15 기준 30일 뒤(12/15)까지라 아직 아님
+  const env2 = createEnv({ now: '2026-12-10T01:00:00Z', ledger: ledger(), notify: 'boss@example.com' });
+  env2.ctx.dailyReport();
+  assert.match(env2.mails[env2.mails.length - 1].body, /2027년 예약도 받기 시작했어요\(달력 30일\)/);
   assert.ok(!/01011112222|010-1111-2222|1234567890/.test(m.body));
   const dash = env.sheet('현황').rows;
   assert.ok(dash.some(r => r && r[0] === '2026-11-16' && r[3] >= 1), '현황판에 11/16 예약 수');

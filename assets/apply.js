@@ -198,14 +198,45 @@
     var open = cal.filter(function (d) { return d.open; });
     if (!open.length) { hint.hidden = false; hint.textContent = '지금은 예약 가능한 날짜가 없어요. 카카오채널로 문의해 주세요.'; track('nodate', state.cls.zone); return; }
     hint.hidden = true;
-    open.forEach(function (d) {
-      var dt = R.parseYmd(d.date);
-      var b = document.createElement('button');
-      b.type = 'button'; b.className = 'ap-date' + (state.date === d.date ? ' on' : '');
-      b.innerHTML = '<b>' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate() + '</b><small>' + (d.date === sc.today ? '오늘 (5시 마감)' : WD[dt.getUTCDay()] + '요일') + '</small>';
-      b.addEventListener('click', function () { state.date = d.date; clearErr('date'); renderDates(); track('date', d.date === sc.today ? '오늘' : ''); });
-      box.appendChild(b);
-    });
+    // 2026-11-16: 달력(한 달씩) — 가능한 날만 초록으로 눌림
+    var byDate = {}; cal.forEach(function (d) { byDate[d.date] = d; });
+    var months = []; cal.forEach(function (d) { var m = d.date.slice(0, 7); if (months.indexOf(m) < 0) months.push(m); });
+    var firstOpenM = open[0].date.slice(0, 7), lastOpenM = open[open.length - 1].date.slice(0, 7);
+    var mon = state.calMonth || (state.date ? state.date.slice(0, 7) : firstOpenM);
+    if (mon < firstOpenM) mon = firstOpenM; if (mon > lastOpenM) mon = lastOpenM;
+    state.calMonth = mon;
+    var y = +mon.slice(0, 4), mo = +mon.slice(5, 7);
+    var head = document.createElement('div'); head.className = 'ap-cal-head';
+    var prev = document.createElement('button'), next = document.createElement('button');
+    prev.type = next.type = 'button'; prev.className = next.className = 'ap-cal-nav';
+    prev.innerHTML = '&#9664;'; next.innerHTML = '&#9654;'; prev.setAttribute('aria-label', '이전 달'); next.setAttribute('aria-label', '다음 달');
+    prev.disabled = mon <= firstOpenM; next.disabled = mon >= lastOpenM;
+    var shift = function (k) { var t = new Date(Date.UTC(y, mo - 1 + k, 1)); state.calMonth = t.getUTCFullYear() + '-' + ('0' + (t.getUTCMonth() + 1)).slice(-2); renderDates(); track('calmonth', state.calMonth); };
+    prev.addEventListener('click', function () { shift(-1); }); next.addEventListener('click', function () { shift(1); });
+    var title = document.createElement('b'); title.textContent = y + '년 ' + mo + '월';
+    head.appendChild(prev); head.appendChild(title); head.appendChild(next); box.appendChild(head);
+    var grid = document.createElement('div'); grid.className = 'ap-cal';
+    WD.forEach(function (w, i) { var h = document.createElement('span'); h.className = 'ap-cal-wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : ''); h.textContent = w; grid.appendChild(h); });
+    var lead = new Date(Date.UTC(y, mo - 1, 1)).getUTCDay(), last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    for (var i = 0; i < lead; i++) grid.appendChild(document.createElement('span'));
+    for (var dd = 1; dd <= last; dd++) (function (dd) {
+      var ds = mon + '-' + ('0' + dd).slice(-2), info = byDate[ds];
+      var c = document.createElement('button'); c.type = 'button';
+      var tag = '';
+      if (ds === sc.today && info && info.open) tag = '오늘';
+      else if (info && info.reason === 'full') tag = '마감';
+      else if (info && info.reason === 'closed') tag = '휴무';
+      c.className = 'ap-day' + (info && info.open ? ' ok' : '') + (state.date === ds ? ' on' : '') + (ds === sc.today ? ' today' : '');
+      c.innerHTML = '<b>' + dd + '</b>' + (tag ? '<small>' + tag + '</small>' : '');
+      if (info && info.open) c.addEventListener('click', function () { state.date = ds; clearErr('date'); renderDates(); track('date', ds === sc.today ? '오늘' : ''); });
+      else c.disabled = true;
+      grid.appendChild(c);
+    })(dd);
+    box.appendChild(grid);
+    var pick = document.createElement('p'); pick.className = 'ap-cal-pick';
+    if (state.date) { var sd = R.parseYmd(state.date); pick.innerHTML = '선택: <b>' + (sd.getUTCMonth() + 1) + '월 ' + sd.getUTCDate() + '일 (' + WD[sd.getUTCDay()] + ')</b>' + (state.date === sc.today ? ' · 오늘 오후 5시 마감' : ''); }
+    else { pick.className += ' none'; pick.textContent = '초록색 날짜 중 하나를 눌러 주세요.'; }
+    box.appendChild(pick);
   }
 
   function loadSchedule() {
