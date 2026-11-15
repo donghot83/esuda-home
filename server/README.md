@@ -12,6 +12,7 @@
 | 예약 서버 | `server/apps-script/Code.gs` (Google Apps Script 웹 앱) | 서버에서 다시 검사 → 구글 시트에 저장 → 확정·예약번호 반환, 같은 제출 재시도 시 중복 없음 | 무료 (회사 구글 계정) |
 | 예약 장부(DB) | 구글 시트 `예약` / `마감` / `주말예외` | 예약 확정 여부·장부 반영 여부 표시, 직원이 마감 날짜 입력 | 무료 |
 | 장부 자동 입력 | `server/apps-script/Ledger.gs` | 확정 즉시 구글 시트 장부 `N월 매입금액`의 예약 칸에 날짜별로 1줄(날짜·이름·지역구·주소, K열 메모에 예약번호·수거양·요청). 연락처·계좌·현관 비번은 넣지 않음. 해당 달 시트가 없거나 장부를 못 열면 `대기`로 두고 `syncLedgerPending`(10분 트리거)이 다시 넣음, 예약번호로 중복 방지 | 무료 |
+| 다건이체 파일 | `server/apps-script/Transfer.gs` | 장부에 무게가 적힌 신청페이지 예약 → 대표 드라이브에 '[신한 다건이체] 날짜' 파일(업로드용: 신한 BizBank 파일불러오기 필드 순서 / 확인용). 15kg 미만 무상수거 표시, 중복 방지, 송금 후 입금완료 표시. **송금은 담당자가 은행에서 직접** | 무료 (BizBank 대량이체 권한은 은행 신청) |
 | (예비) 장부 반영 | (대표 PC, 저장소 밖) `ledger_sync/ledger_sync.py` | 엑셀 장부용 예비 경로 | 무료 |
 
 ## 개인정보·보안
@@ -22,7 +23,7 @@
 
 ## 배포 순서 (대표 승인 후, 대표 구글 계정으로)
 1. 구글 드라이브에서 새 스프레드시트 만들기 → 확장 프로그램 → Apps Script.
-2. `Code.gs`, `Rules.gs`, `Ledger.gs` 내용을 붙여넣기 → 프로젝트 설정 → 시간대 `Asia/Seoul`.
+2. `Code.gs`, `Rules.gs`, `Ledger.gs`, `Transfer.gs` 내용을 붙여넣기 → 프로젝트 설정 → 시간대 `Asia/Seoul`.
 3. 프로젝트 설정 → 스크립트 속성 `STAFF_TOKEN` = 긴 임의 문자열 (대표 PC의 토큰 파일에만 보관), `LEDGER_ID` = 장부 스프레드시트 ID (**시험 때는 장부 사본 ID**).
 3-1. 트리거 → `syncLedgerPending` 시간 기반 10분마다.
 4. 배포 → 새 배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자 → 웹 앱 URL 복사.
@@ -38,6 +39,6 @@
 ## 테스트
 ```
 python tools/sync_rules.py      # 규칙을 고쳤을 때
-node --test tests/*.test.js     # 규칙·서버·장부 자동 입력 32개
+node --test tests/*.test.js     # 규칙·서버·장부 자동 입력·다건이체 36개
 node tools/mock_server.js       # http://localhost:8787/apply/ (가짜 서버·가상 데이터)
 ```
