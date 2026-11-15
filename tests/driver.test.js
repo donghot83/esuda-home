@@ -69,3 +69,21 @@ test('수거 완료 체크 → 다시 불러와도 유지, 되돌리기 가능, 
   assert.strictEqual(post(env, { action: 'driverMark', key: 'BAD', date: '2026-11-16', id, state: '완료' }).error, 'forbidden');
   assert.strictEqual(post(env, { action: 'driverMark', key: 'GOODKEY123', date: 'x', id, state: '완료' }).error, 'bad_request');
 });
+
+test('기사님 지도: 좌표와 출발지, 확정 전엔 동선 미리보기 순서(pv), 확정 후엔 미리보기 없음', () => {
+  const geo = { '경기 고양시 덕양구 가상로 5': [37.635, 126.835], '서울 은평구 가상로 7': [37.61, 126.925], '서울 모래내로3길 7': [37.5649, 126.905] };
+  const L = { '11월 매입금액': [HEAD,
+    [null, D('2026-11-16'), '은평손님', '은평구', '가상로 7'],
+    [null, D('2026-11-16'), '덕양손님', '고양시', '덕양구 가상로 5']] };
+  const env = createEnv({ now: NOW, ledger: L, geo, props: { DRIVER_KEY: 'GOODKEY123' } });
+  const r = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
+  assert.strictEqual(r.preview, true);
+  assert.strictEqual(r.start.lat, 37.5649);
+  const by = n => r.items.find(x => x.name === n);
+  assert.strictEqual(by('덕양손님').pv, 1); assert.strictEqual(by('은평손님').pv, 2); // 일산·덕양 쪽부터
+  assert.strictEqual(by('은평손님').lat, 37.61);
+  env.ctx.routeDate('2026-11-16');
+  const r2 = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
+  assert.strictEqual(r2.preview, false);
+  assert.strictEqual(JSON.stringify(r2.items.map(x => x.no + x.name)), JSON.stringify(['1덕양손님', '2은평손님']));
+});

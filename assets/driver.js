@@ -36,7 +36,8 @@
         $('msg').textContent = '목록을 못 불러왔어요. 잠시 뒤 새로고침해 주세요.'; return;
       }
       $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
-      st.date = r.date; st.items = r.items;
+      st.date = r.date; st.items = r.items; st.start = r.start; st.preview = r.preview;
+      st.items.forEach(function (it, i) { it._i = i; });
       $('dayLabel').textContent = r.label;
       $('dayZone').textContent = r.weekend ? '주말 휴무' : (r.route || r.zone + ' · 동선 확정 전(17시)');
       $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거 예약이 없어요.');
@@ -47,6 +48,7 @@
   function sorted() {
     var a = st.items.map(function (it, i) { it._i = i; return it; });
     if (st.sort === 'area') a = a.slice().sort(function (x, y) { return (x.area + x.addr).localeCompare(y.area + y.addr, 'ko') || x._i - y._i; });
+    if (st.sort === 'route') a = a.slice().sort(function (x, y) { return (x.pv || 999) - (y.pv || 999) || x._i - y._i; });
     if (st.sort === 'todo') a = a.slice().sort(function (x, y) { return (x.state === '완료') - (y.state === '완료') || x._i - y._i; });
     return a;
   }
@@ -59,6 +61,7 @@
     $('sum').innerHTML = '<span>수거 ' + live.length + '건' + (cancels.length ? ' <em class="dv-cx">취소 ' + cancels.length + '</em>' : '') + '</span><span class="done">완료 ' + done + (fail ? ' · 못함 ' + fail : '') + '</span>';
     $('cancelBox').hidden = !cancels.length;
     $('cancelBox').innerHTML = '❌ 취소: ' + cancels.map(function (c) { return '<b>' + (c.no ? esc(c.no) + '번 ' : '') + esc(c.name) + '</b>(' + esc(c.area) + ')'; }).join(', ') + '<br><small>봉투 번호는 그대로예요. 이 번호는 건너뛰세요.</small>';
+    try { drawMap(); } catch (e) {}
     $('list').innerHTML = sorted().map(function (it) {
       if (it.cancelled) {
         return '<li class="dv-item cancel"><div class="dv-top"><span class="dv-no">' + esc(it.no || (it._i + 1)) + '</span><span class="dv-name">' + esc(it.name) + '</span><span class="dv-area">' + esc(it.area) + '</span><span class="dv-badge">취소됨' + (it.cancelAt ? ' ' + esc(it.cancelAt) : '') + '</span></div>' +
@@ -83,6 +86,36 @@
           '<button type="button" class="no" data-act="' + (it.state === '못함' ? '' : '못함') + '">' + (it.state === '못함' ? '못함 취소' : '못 가져옴') + '</button>' +
         '</div></li>';
     }).join('');
+  }
+
+  var map = null, layer = null;
+  function drawMap() {
+    var box = $('mapBox');
+    if (!window.L) { box.hidden = true; return; }
+    var pts = st.items.filter(function (it) { return it.lat && !it.cancelled; });
+    box.hidden = !pts.length;
+    if (!pts.length) return;
+    var usePv = st.preview && pts.some(function (it) { return it.pv; });
+    var num = function (it) { return usePv ? it.pv : (it.no || (it._i + 1)); };
+    pts.sort(function (a, b) { return num(a) - num(b); });
+    $('mapNote').textContent = usePv ? '동선 미리보기 (17시 확정 전 — 번호는 확정 때 정해져요)' : '장부 번호 순서';
+    if (!map) {
+      map = L.map('map', { zoomControl: true, attributionControl: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(map);
+    }
+    if (layer) layer.remove();
+    layer = L.layerGroup().addTo(map);
+    var line = pts.map(function (it) { return [it.lat, it.lng]; });
+    L.polyline(line, { color: '#e11d48', weight: 4, opacity: 0.85 }).addTo(layer);
+    if (st.start) L.marker([st.start.lat, st.start.lng], { icon: L.divIcon({ className: '', html: '<div class="dv-pin start">출발</div>', iconSize: [34, 28], iconAnchor: [17, 14] }) }).bindPopup(st.start.label).addTo(layer);
+    pts.forEach(function (it) {
+      var cls = it.state === '완료' ? ' done' : (usePv ? ' pv' : '');
+      L.marker([it.lat, it.lng], { icon: L.divIcon({ className: '', html: '<div class="dv-pin' + cls + '">' + num(it) + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) })
+        .bindPopup('<b>' + num(it) + '. ' + esc(it.name) + '</b><br>' + esc(it.area) + ' ' + esc(it.road || it.addr) + (it.geo === '구청' ? '<br><small>※ 주소 위치 확인 필요(구 중심으로 표시)</small>' : ''))
+        .addTo(layer);
+    });
+    var b = L.latLngBounds(line); if (st.start) b.extend([st.start.lat, st.start.lng]);
+    setTimeout(function () { map.invalidateSize(); map.fitBounds(b, { padding: [24, 24] }); }, 50);
   }
 
   $('list').addEventListener('click', function (e) {

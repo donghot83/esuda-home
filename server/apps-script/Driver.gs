@@ -90,8 +90,20 @@ function driverList_(b) {
   }
   var wd = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10))).getUTCDay();
   var rd = PropertiesService.getScriptProperties().getProperty('ROUTE_DONE_' + date) || '';
+  // 지도용 좌표 (좌표 탭에 저장된 것 재사용) + 확정 전이면 동선 미리보기 순서
+  var start = null, preview = false;
+  try {
+    var g0 = geocode_(DRIVER_START_ADDR, '마포구'); if (g0.src) start = { lat: g0.lat, lng: g0.lng, label: '출발 (모래내로3길 7)' };
+    items.forEach(function (it) { if (it.cancelled) return; var g = geocode_(it.map, it.area); if (g.src) { it.lat = g.lat; it.lng = g.lng; it.geo = g.src; } });
+    if (!rd) {
+      var located = items.filter(function (it) { return it.lat && !it.cancelled; });
+      var an = ROUTE_ANCHORS[(+date.slice(8, 10)) % 2 ? 'odd' : 'even'];
+      routeOrder_(located, an.from, an.to).forEach(function (k, n) { located[k].pv = n + 1; });
+      preview = located.length > 1;
+    }
+  } catch (e) { logError_('기사님 지도', e); }
   return { ok: true, date: date, label: R_dateLabel_(date), route: rd ? ('동선 확정 ' + rd + ' · ' + ((+date.slice(8, 10)) % 2 ? '김포 → 강동' : '일산 → 광진')) : '', zone: (+date.slice(8, 10)) % 2 ? '홀수일 · 한강 남쪽·김포' : '짝수일 · 한강 북쪽·일산·덕양',
-    weekend: R.CONFIG.closedWeekdays.indexOf(wd) >= 0, ledger: !!sh, items: items };
+    weekend: R.CONFIG.closedWeekdays.indexOf(wd) >= 0, ledger: !!sh, items: items, start: start, preview: preview };
 }
 
 /** {action:'driverMark', key, date, id, name, state:'완료'|'못함'|''} → 기록 */

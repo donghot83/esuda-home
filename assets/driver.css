@@ -49,3 +49,11 @@ button{font:inherit;cursor:pointer}
 .dv-item.cancel .dv-name,.dv-item.cancel .dv-addr{text-decoration:line-through;color:#a33}
 .dv-item.cancel .dv-no{background:#c62828}
 .dv-badge{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:#c62828;border-radius:6px;padding:2px 8px;white-space:nowrap}
+.dv-mapbox{background:#fff;border-radius:12px;margin-bottom:8px;overflow:hidden}
+.dv-mapbox summary{padding:10px 14px;font-weight:700;cursor:pointer}
+.dv-mapbox summary small{font-weight:600;color:var(--sub);margin-left:6px}
+#map{height:340px;width:100%}
+.dv-pin{width:28px;height:28px;border-radius:50%;background:#1f4fd8;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.dv-pin.done{background:#2f9a14}
+.dv-pin.pv{background:#64748b}
+.dv-pin.start{background:#111;width:34px;font-size:11px;border-radius:8px}
