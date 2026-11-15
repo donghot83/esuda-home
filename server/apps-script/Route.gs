@@ -9,7 +9,7 @@
  * 좌표를 못 찾은 주소는 그 구의 구청 좌표로 대신하고 메일·화면에 '확인 필요'로 표시.
  */
 
-var DRIVER_START_ADDR = '서울 서대문구 모래내로3길 7';
+var DRIVER_START_ADDR = '서울 모래내로3길 7';
 var ROUTE_ANCHORS = {
   odd:  { from: { name: '김포', lat: 37.6153, lng: 126.7157 }, to: { name: '강동', lat: 37.5301, lng: 127.1238 } },
   even: { from: { name: '일산', lat: 37.6753, lng: 126.7510 }, to: { name: '광진', lat: 37.5385, lng: 127.0823 } }
@@ -73,13 +73,15 @@ function routeOrder_(pts, S, E) {
     }
     cur = pts[left[best]]; path.push(left.splice(best, 1)[0]);
   }
-  var node = function (k) { return k < 0 ? S : (k >= n ? E : pts[path[k]]); };
+  // 끝은 열어 둠: 마지막 집에서 끝남 (끝점 E 는 방향 잡기에만 사용)
+  var node = function (k) { return k < 0 ? S : (k >= n ? null : pts[path[k]]); };
+  var dd = function (a, b) { return a && b ? dist_(a, b) : 0; };
   var improved = true, guard = 0;
   while (improved && guard++ < 200) { // 2-opt (양 끝 고정)
     improved = false;
     for (var a = 0; a < n - 1; a++) for (var b = a + 1; b < n; b++) {
-      var before = dist_(node(a - 1), node(a)) + dist_(node(b), node(b + 1));
-      var after = dist_(node(a - 1), node(b)) + dist_(node(a), node(b + 1));
+      var before = dd(node(a - 1), node(a)) + dd(node(b), node(b + 1));
+      var after = dd(node(a - 1), node(b)) + dd(node(a), node(b + 1));
       if (after + 1e-9 < before) { path = path.slice(0, a).concat(path.slice(a, b + 1).reverse(), path.slice(b + 1)); improved = true; }
     }
   }
@@ -89,7 +91,7 @@ function routeOrder_(pts, S, E) {
 function routeTotalKm_(pts, order, S, E) {
   var km = 0, prev = S;
   order.forEach(function (i) { km += dist_(prev, pts[i]); prev = pts[i]; });
-  return km + dist_(prev, E);
+  return km;
 }
 
 function routeKey_(date) { return 'ROUTE_DONE_' + date; }
