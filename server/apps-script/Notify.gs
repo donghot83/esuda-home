@@ -8,7 +8,7 @@
  * 알림 메일: 스크립트 속성 NOTIFY_EMAILS (쉼표로 여러 개) 로 예약 확정 요약을 보낸다. 연락처·계좌는 넣지 않는다.
  */
 
-var BOOK_EXTRA_HEADERS = ['사진방식', '사진'];
+var BOOK_EXTRA_HEADERS = ['사진방식', '사진', '무상희망'];
 var PHOTO_FOLDER_NAME = '이수다 수거사진';
 var PHOTO_MAX_B64 = 2800000; // base64 글자 수 (약 2MB)
 

@@ -150,3 +150,46 @@ test('계좌번호 6~20자리 허용, 증권사 선택 가능', () => {
   assert.strictEqual(env.post(sub({ account: '12345' })).ok, false);
   assert.strictEqual(env.post(sub({ account: '1'.repeat(20), bank: '토스증권' })).ok, true);
 });
+
+test('계좌 선택사항: "계좌 없이 무상으로" 체크 또는 15kg 미만이면 비워도 신청됨, 15kg 이상은 계좌나 체크 필요', () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  const a = env.post(sub({ name: '무상희망', bank: '', account: '', holder: '', noPay: true }));
+  assert.strictEqual(a.ok, true, JSON.stringify(a));
+  const b = env.post(sub({ name: '십오미만', amount: R.AMOUNTS[0], bank: '', account: '', holder: '' }));
+  assert.strictEqual(b.ok, true, JSON.stringify(b));
+  const c = env.post(sub({ name: '이상빈칸', amount: R.AMOUNTS[1], bank: '', account: '', holder: '' }));
+  assert.strictEqual(c.ok, false); assert.match(c.errors.bank, /무상으로 수거해 주세요/);
+  const L = env.ledger['11월 매입금액'].rows;
+  assert.match(L.find(x => x && x[2] === '무상희망')[10], /무상 희망\(계좌 없음\)/);
+  assert.match(L.find(x => x && x[2] === '십오미만')[10], /계좌 없음/);
+  const bk = env.sheet('예약').rows, h = bk[0];
+  assert.strictEqual(bk.find(x => x[h.indexOf('이름')] === '무상희망')[h.indexOf('무상희망')], '예');
+});
+
+test('이체 파일: 무상 희망은 무게가 15kg 넘어도 무상수거로, 계좌 없는 15kg 이상은 "계좌 받기" 확인 필요', () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  env.post(sub({ name: '무상희망', bank: '', account: '', holder: '', noPay: true }));
+  env.post(sub({ name: '계좌없음', amount: R.AMOUNTS[0], bank: '', account: '', holder: '' }));
+  const L = env.ledger['11월 매입금액'].rows;
+  L.find(x => x && x[2] === '무상희망')[5] = 40; L.find(x => x && x[2] === '계좌없음')[5] = 30;
+  const r = env.ctx.makeTransferFile();
+  assert.strictEqual(r.count, 0); assert.strictEqual(r.free, 1);
+  assert.ok(r.skipped.some(s => /계좌 없음/.test(s['이유'])));
+});
+
+test('방문 단계 기록: track 은 개인정보 없이 한 줄씩 쌓이고, 점검 메일에 단계별 사람 수가 나옴', () => {
+  const env = createEnv({ now: NOW, ledger: ledger(), notify: 'boss@example.com' });
+  ['open', 'addr', 'date', 'submit', 'done'].forEach(s => env.post({ action: 'track', sid: 'aaaa1111', step: s, info: '', dev: '카톡' }));
+  ['open', 'addr'].forEach(s => env.post({ action: 'track', sid: 'bbbb2222', step: s, info: '', dev: '모바일' }));
+  env.post({ action: 'track', sid: 'bbbb2222', step: 'invalid', info: 'account,holder', dev: '모바일' });
+  env.post({ action: 'track', sid: 'bbbb2222', step: 'leave', info: 'addr', dev: '모바일' });
+  env.post({ action: 'track', sid: 'cccc3333', step: 'open', info: '', dev: 'PC' });
+  env.post({ action: 'track', sid: 'cccc3333', step: 'addr', info: 'outside 인천 부평구', dev: 'PC' });
+  assert.strictEqual(env.post({ action: 'track', sid: 'x', step: 'BAD STEP!' }).ok, false);
+  env.ctx.dailyReport();
+  const body = env.mails[env.mails.length - 1].body;
+  assert.match(body, /화면 열기 3 → 주소 선택 3 → 날짜 선택 1 → 신청 누름 1 → 예약 완료 1/);
+  assert.match(body, /많이 틀린 칸: 계좌번호 1, 예금주 1/);
+  assert.match(body, /중간에 나간 곳: 주소 선택 뒤 1/);
+  assert.match(body, /받지 않는 지역 주소: 인천 부평구 1/);
+});

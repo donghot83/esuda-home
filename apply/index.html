@@ -8,7 +8,7 @@
 <meta name="description" content="이수다 헌옷 방문수거 신청">
 <link rel="icon" href="../assets/favicon-32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="../assets/apply.css?v=4">
+<link rel="stylesheet" href="../assets/apply.css?v=5">
 </head>
 <body>
 <header class="ap-head">
@@ -64,6 +64,7 @@
         <label class="ap-addr-btn ap-photo-btn" for="photoInput">📷 사진 찍기 / 앨범에서 고르기 (최대 3장)</label>
         <input type="file" id="photoInput" accept="image/*" multiple hidden>
         <div class="ap-photos" id="photoList"></div>
+        <p class="ap-err" data-err="photo"></p>
         <p class="ap-small">옷만 보이게 찍어 주세요. 사진은 예약이 확정된 뒤 올라가요.</p>
       </div>
       <p class="ap-small" id="photoLaterHint" hidden>신청이 끝나면 예약번호와 함께 카카오채널로 사진을 보내 주세요.</p>
@@ -90,14 +91,18 @@
 
     <!-- 5. 계좌 -->
     <section class="ap-card">
-      <h2><span class="n">5</span>매입금액 받으실 계좌 <em>필수</em></h2>
-      <p class="ap-hint">센터에서 무게를 잰 뒤 영업일 기준 3일 안에 입금해 드려요. 15kg 미만은 무상수거예요.</p>
+      <h2><span class="n">5</span>매입금액 받으실 계좌</h2>
+      <p class="ap-hint">센터에서 무게를 잰 뒤 15kg 이상이면 영업일 기준 3일 안에 입금해 드려요. 15kg 미만은 무상수거예요.</p>
+      <label class="ap-check ap-nopay"><input type="checkbox" id="noPay"> 계좌 없이 무상으로 수거해 주세요</label>
+      <div id="payFields">
       <label class="ap-field"><span>은행</span><select id="bank"><option value="">은행 선택</option></select></label>
       <p class="ap-err" data-err="bank"></p>
       <label class="ap-field"><span>계좌번호</span><input id="account" inputmode="numeric" maxlength="26" placeholder="숫자만 입력" autocomplete="off"></label>
       <p class="ap-err" data-err="account"></p>
       <label class="ap-field"><span>예금주</span><input id="holder" maxlength="20" placeholder="예금주 이름"></label>
       <p class="ap-err" data-err="holder"></p>
+      </div>
+      <p class="ap-small" id="payOptHint" hidden>15kg 미만을 고르셨어요. 계좌는 비워도 돼요. (무게가 15kg 넘으면 카카오채널로 계좌를 여쭤볼게요)</p>
     </section>
 
     <!-- 6. 요청사항 -->
@@ -160,8 +165,8 @@
 </div>
 
 <script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-<script src="../assets/apply-rules.js?v=4"></script>
-<script src="../assets/apply-config.js?v=4"></script>
-<script src="../assets/apply.js?v=5"></script>
+<script src="../assets/apply-rules.js?v=5"></script>
+<script src="../assets/apply-config.js?v=5"></script>
+<script src="../assets/apply.js?v=7"></script>
 </body>
 </html>

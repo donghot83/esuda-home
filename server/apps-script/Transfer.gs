@@ -100,6 +100,8 @@ function makeTransferFile(opts) {
       if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거', rid: rid, lr: lr }); continue; }
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
+      if (col('무상희망') >= 0 && String(r[col('무상희망')]) === '예') { free++; marks.push({ row: i + 1, file: '', state: '무상수거(고객 희망)', rid: rid, lr: lr }); continue; }
+      if (!acct) { skipped.push({ 예약번호: rid, 이유: '계좌 없음 — 고객에게 계좌를 받아 예약 시트에 넣어 주세요' }); continue; }
       if (!code || acct.length < 6) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
       var holder = String(r[col('예금주')] || r[col('이름')]);
       var rec = { '은행코드': code, '은행명': bank, '계좌번호': acct, '금액': pa.amount, '예금주': holder,
@@ -129,7 +131,7 @@ function makeTransferFile(opts) {
     marks.forEach(function (m) {
       sh.getRange(m.row, col('지급상태') + 1).setValue(m.state);
       if (m.state === '이체파일생성') sh.getRange(m.row, col('이체파일') + 1).setValue(fileName);
-      if (m.state === '무상수거') { try { alimSettled_(m.rid, m.lr, 0); } catch (e) { logError_('알림톡(무상수거)', e); } }
+      if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0); } catch (e) { logError_('알림톡(무상수거)', e); } }
     });
     return res;
   } finally { lock.releaseLock(); }

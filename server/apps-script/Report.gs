@@ -179,6 +179,7 @@ function dailyReport() {
         .map(function (r) { return dayLabel_(fmtDate_(r[1])) + ' ' + r[2] + '번 ' + r[3]; });
       return '■ 오늘 처리한 취소: ' + (t.length ? t.length + '건 — ' + t.join(', ') : '없음');
     })(),
+    (function () { try { return visitSummary_(chk.today).text; } catch (e) { return '■ 신청 화면 방문: 집계 실패'; } })(),
     '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)',
     '■ 내일 ' + dayLabel_(t.date) + ' 수거: 전체 ' + t.total + '건 (신청페이지 ' + t.page + '건' + (areas ? ': ' + areas : '') + ')',
     '■ 앞으로 7일 (장부 포함): ' + next7.join(' / '),
@@ -360,4 +361,46 @@ function setupFastSubmit() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'syncLedgerPending') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('syncLedgerPending').timeBased().everyMinutes(5).create();
   Logger.log('신청 응답 빠르게 설정 완료 — 장부는 5분마다 자동 반영');
+}
+
+/* ===== 방문 단계 기록 (2026-11-16: 신청 화면에서 어디서 그만두는지) — 개인정보 없음 ===== */
+var SHEET_VISIT = '방문기록';
+var VISIT_STEPS = ['open', 'addr', 'date', 'submit', 'done'];
+var VISIT_LABEL = { open: '화면 열기', addr: '주소 선택', date: '날짜 선택', submit: '신청 누름', done: '예약 완료', invalid: '입력 오류', leave: '나감', fail: '저장 실패', nodate: '고를 날짜 없음', photo_fail: '사진 실패', photo_read_fail: '사진 못 읽음' };
+function track_(b) {
+  var step = String(b.step || '');
+  if (!/^[a-z_]{2,20}$/.test(step)) return { ok: false };
+  try {
+    sheet_(SHEET_VISIT, ['시각', '방문', '단계', '내용', '기기']).appendRow([
+      Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'),
+      String(b.sid || '').replace(/[^a-z0-9]/g, '').slice(0, 12), step, String(b.info || '').slice(0, 80), String(b.dev || '').slice(0, 10)]);
+  } catch (e) {}
+  return { ok: true };
+}
+/** 그날 방문 단계 요약 */
+function visitSummary_(date) {
+  var sh = ss_().getSheetByName(SHEET_VISIT);
+  var out = { visits: 0, steps: {}, errors: {}, leaves: {}, out: {}, dev: {}, text: '■ 신청 화면 방문: 기록 없음' };
+  if (!sh) return out;
+  var seen = {};
+  sh.getDataRange().getValues().slice(1).forEach(function (r) {
+    if (String(r[0]).slice(0, 10) !== date) return;
+    var sid = String(r[1]), st = String(r[2]), info = String(r[3]);
+    seen[sid + '|' + st] = 1;
+    if (st === 'open') { out.visits++; out.dev[r[4]] = (out.dev[r[4]] || 0) + 1; }
+    if (st === 'invalid') info.replace(/^server:/, '').split(',').forEach(function (f) { if (f) out.errors[f] = (out.errors[f] || 0) + 1; });
+    if (st === 'leave') out.leaves[info] = (out.leaves[info] || 0) + 1;
+    if (st === 'addr' && info && info !== 'ok') out.out[info] = (out.out[info] || 0) + 1;
+  });
+  Object.keys(seen).forEach(function (k) { var st = k.split('|')[1]; out.steps[st] = (out.steps[st] || 0) + 1; });
+  var F = { name: '이름', phone: '휴대폰', address: '주소', addressDetail: '상세주소', date: '날짜', amount: '수거양', amountDetail: '수거양 내용', place: '놓을 곳', placeDetail: '놓을 곳 내용', entrance: '공동현관', bank: '은행', account: '계좌번호', holder: '예금주', agreeNotice: '확인 체크', agreePrivacy: '개인정보 동의', submissionId: '새로고침 필요' };
+  var fun = VISIT_STEPS.map(function (s) { return VISIT_LABEL[s] + ' ' + (out.steps[s] || 0); }).join(' → ');
+  var errs = Object.keys(out.errors).sort(function (a, b) { return out.errors[b] - out.errors[a]; }).map(function (k) { return (F[k] || k) + ' ' + out.errors[k]; }).join(', ');
+  var lv = Object.keys(out.leaves).map(function (k) { return (VISIT_LABEL[k] || k) + ' 뒤 ' + out.leaves[k]; }).join(', ');
+  var ar = Object.keys(out.out).map(function (k) { return k.replace(/^(outside|check) /, '') + ' ' + out.out[k]; }).join(', ');
+  var ph = (out.steps.photo_fail || 0) + (out.steps.photo_read_fail || 0);
+  out.text = '■ 신청 화면 (오늘, 사람 수): ' + fun +
+    (errs ? '\n   - 많이 틀린 칸: ' + errs : '') + (lv ? '\n   - 중간에 나간 곳: ' + lv : '') + (ar ? '\n   - 받지 않는 지역 주소: ' + ar : '') +
+    (out.steps.nodate ? '\n   - 고를 날짜가 없던 사람: ' + out.steps.nodate : '') + (ph ? '\n   - 사진 문제: ' + ph + '명' : '');
+  return out;
 }

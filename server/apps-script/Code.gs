@@ -136,6 +136,7 @@ function doPost(e) {
   try {
     if (body.action === 'submit') return json_(submit_(body));
     if (body.action === 'photo') return json_(photo_(body));
+    if (body.action === 'track') return json_(track_(body));   // 방문 단계 기록 (개인정보 없음)
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만
@@ -181,7 +182,7 @@ function submit_(p) {
       '도로명주소': c.roadAddress, '지번주소': c.jibunAddress, '상세주소': c.addressDetail, '수거양': c.amount,
       '놓을곳': c.place, '놓을곳상세': c.placeDetail, '공동현관': c.entrance, '공동현관비번': c.entranceCode,
       '요청사항': c.memo, '은행': c.bank, '계좌번호': c.account, '예금주': c.holder, '제출ID': c.submissionId, '출처': '신청페이지',
-      '사진방식': c.photoMode, '사진': ''
+      '사진방식': c.photoMode, '사진': '', '무상희망': c.noPay ? '예' : ''
     };
     // 숫자로 바뀌지 않게(앞자리 0 보존) 문자열로 저장
     sh.appendRow(hdr.map(function (h) { var x = row[h]; return (h === '연락처' || h === '계좌번호' || h === '우편번호') ? "'" + x : (x === undefined ? '' : x); }));

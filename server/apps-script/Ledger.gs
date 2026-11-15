@@ -124,7 +124,7 @@ function ledgerAppend_(c, rid) {
   sh.getRange(at, LEDGER_COL.name).setValue(c.name);
   sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
-  sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.memo ? ' / ' + c.memo : ''));
+  sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
   try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
   bumpLedgerCount_(c.date, 1);
   return { ok: true, row: at };
@@ -225,7 +225,8 @@ function bookRowToClean_(hdr, row) {
   var g = function (h) { return row[hdr.indexOf(h)]; };
   return { date: fmtDate_(g('수거일')), name: String(g('이름') || ''), sigungu: String(g('시군구') || ''),
     roadAddress: String(g('도로명주소') || ''), jibunAddress: String(g('지번주소') || ''), addressDetail: String(g('상세주소') || ''),
-    amount: String(g('수거양') || ''), memo: String(g('요청사항') || '') };
+    amount: String(g('수거양') || ''), memo: String(g('요청사항') || ''),
+    payNote: String(g('무상희망') || '') === '예' ? '무상 희망(계좌 없음)' : (String(g('계좌번호') || '').replace(/[^0-9]/g, '') ? '' : '계좌 없음') };
 }
 
 /** '대기' 예약을 장부에 다시 넣기 + 장부 줄 수·현황판 새로 고침 — 시간 트리거(10분마다). 반환 {added, waiting} */

@@ -25,6 +25,23 @@
     return;
   }
 
+  // ---------------- 방문 단계 기록 (2026-11-16: 어디서 그만두는지 보려고 — 이름·연락처 등 개인정보는 안 보냄)
+  var TRK = { sid: Math.random().toString(36).slice(2, 10), sent: {}, last: 'open', done: false };
+  var DEV = /KAKAOTALK/i.test(navigator.userAgent) ? '카톡' : (/iPhone|iPad|Android/i.test(navigator.userAgent) ? '모바일' : 'PC');
+  function track(step, info) {
+    var key = step + (step === 'invalid' ? ':' + info : '');
+    if (TRK.sent[key] || !API || isLocal) return;
+    TRK.sent[key] = 1; if (step !== 'leave') TRK.last = step;
+    var body = JSON.stringify({ action: 'track', sid: TRK.sid, step: step, info: String(info || '').slice(0, 80), dev: DEV });
+    try {
+      if (navigator.sendBeacon && navigator.sendBeacon(API, new Blob([body], { type: 'text/plain;charset=utf-8' }))) return;
+      fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body, keepalive: true }).catch(function () {});
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden' && !TRK.done && TRK.last !== 'open') track('leave', TRK.last);
+  });
+
   function api(method, body, query) {
     var url = API + (query ? (API.indexOf('?') >= 0 ? '&' : '?') + query : '');
     var opt = method === 'GET' ? { method: 'GET' } : { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) };
@@ -44,7 +61,7 @@
       box.appendChild(b);
     });
   }
-  chips('amount', R.AMOUNTS, function (t) { $('amountDetailWrap').hidden = t !== R.AMOUNT_OTHER; });
+  chips('amount', R.AMOUNTS, function (t) { $('payOptHint').hidden = t !== R.AMOUNTS[0] || $('noPay').checked; $('amountDetailWrap').hidden = t !== R.AMOUNT_OTHER; });
   // ---------------- 사진 (선택): 휴대폰에서 줄여서(긴 변 1280px, JPEG) 예약 확정 후 한 장씩 전송
   var photos = []; // dataURL
   chips('photoMode', R.PHOTO_MODES, function (t) {
@@ -77,7 +94,7 @@
     var files = Array.prototype.slice.call(this.files || []).slice(0, R.PHOTO_MAX - photos.length);
     this.value = '';
     files.reduce(function (p, f) { return p.then(function () { return shrink(f).then(function (d) { photos.push(d); }); }); }, Promise.resolve())
-      .then(renderPhotos).catch(function () { renderPhotos(); setErr('amount', '사진을 읽지 못했어요. 다른 사진을 골라 주세요.'); });
+      .then(function () { renderPhotos(); clearErr('photo'); }).catch(function () { renderPhotos(); setErr('photo', '사진을 읽지 못했어요. 다른 사진을 고르거나, "나중에 카톡으로 보낼게요"를 골라 주세요.'); track('photo_read_fail', ''); });
   });
   function uploadPhotos(r, p) {
     var list = photos.slice(), done = 0;
@@ -89,6 +106,12 @@
       });
     }, Promise.resolve()).then(function () { return { sent: done, total: list.length }; });
   }
+
+  // 계좌 없이 무상수거 체크 → 계좌 칸 숨김 (2026-11-16)
+  $('noPay').addEventListener('change', function () {
+    $('payFields').hidden = this.checked; ['bank', 'account', 'holder'].forEach(clearErr);
+    if (this.checked) track('nopay', '');
+  });
 
   chips('place', R.PLACES, function (t) { $('placeDetailWrap').hidden = t !== '직접 입력'; });
   chips('entrance', R.ENTRANCE, function (t) { $('entranceCodeWrap').hidden = t !== '공동현관 비밀번호'; });
@@ -125,6 +148,7 @@
     $('addrJibun').textContent = a.jibunAddress ? '지번 ' + a.jibunAddress : '';
     $('btnAddr').textContent = '주소 다시 검색';
     var c = R.classifyAddress(a); state.cls = c;
+    track('addr', c.ok ? 'ok' : (c.reason + ' ' + (a.sido || '') + ' ' + (a.sigungu || '')));
     var z = $('zoneMsg'); z.hidden = false;
     if (c.ok) {
       z.className = 'ap-zone ok';
@@ -154,14 +178,14 @@
     var m = Object.keys(msgs);
     if (m.length) { note.hidden = false; note.textContent = m.join(' / '); }
     var open = cal.filter(function (d) { return d.open; });
-    if (!open.length) { hint.hidden = false; hint.textContent = '지금은 예약 가능한 날짜가 없어요. 카카오채널로 문의해 주세요.'; return; }
+    if (!open.length) { hint.hidden = false; hint.textContent = '지금은 예약 가능한 날짜가 없어요. 카카오채널로 문의해 주세요.'; track('nodate', state.cls.zone); return; }
     hint.hidden = true;
     open.forEach(function (d) {
       var dt = R.parseYmd(d.date);
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'ap-date' + (state.date === d.date ? ' on' : '');
       b.innerHTML = '<b>' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate() + '</b><small>' + (d.date === sc.today ? '오늘 (5시 마감)' : WD[dt.getUTCDay()] + '요일') + '</small>';
-      b.addEventListener('click', function () { state.date = d.date; clearErr('date'); renderDates(); });
+      b.addEventListener('click', function () { state.date = d.date; clearErr('date'); renderDates(); track('date', d.date === sc.today ? '오늘' : ''); });
       box.appendChild(b);
     });
   }
@@ -173,6 +197,7 @@
     }).catch(function () { renderDates(); });
   }
   loadSchedule();
+  track('open', document.referrer ? (document.referrer.split('/')[2] || '') : '');
 
   // ---------------- 오류 표시
   function setErr(f, msg) { var el = document.querySelector('[data-err="' + f + '"]'); if (el) el.textContent = msg || ''; }
@@ -195,7 +220,8 @@
       name: $('name').value, phone: $('phone').value, address: state.address || {}, addressDetail: $('addrDetail').value,
       date: state.date, amount: state.amount, amountDetail: $('amountDetail').value, photoMode: state.photoMode || '', place: state.place, placeDetail: $('placeDetail').value,
       entrance: state.entrance, entranceCode: $('entranceCode').value, memo: $('memo').value,
-      bank: $('bank').value, account: $('account').value, holder: $('holder').value,
+      bank: $('noPay').checked ? '' : $('bank').value, account: $('noPay').checked ? '' : $('account').value, holder: $('noPay').checked ? '' : $('holder').value,
+      noPay: $('noPay').checked,
       agreeNotice: $('agreeNotice').checked, agreePrivacy: $('agreePrivacy').checked
     };
   }
@@ -217,11 +243,13 @@
     clearAll();
     var p = payload();
     var v = R.validateApplication(p, { today: state.schedule.today, now: new Date(), closures: state.schedule.closures, openDates: state.schedule.openDates, counts: state.schedule.counts });
-    if (!v.ok) { showErrors(v.errors); return; }
+    if (!v.ok) { showErrors(v.errors); track('invalid', Object.keys(v.errors).sort().join(',')); return; }
+    track('submit', state.photoMode === R.PHOTO_MODES[0] ? '사진 ' + photos.length + '장' : '');
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
     showWait(true, '예약을 확정하고 있어요. 잠시만 기다려 주세요…');
     api('POST', p).then(function (r) {
       if (r && r.ok) {
+        TRK.done = true; track('done', r.reservationId);
         // 확정 화면을 먼저 보여 주고, 사진은 그 화면에서 올림 (2026-11-16: 사진 때문에 오래 기다리던 문제)
         if (state.photoMode === R.PHOTO_MODES[0] && photos.length) {
           showDone(r, { pending: true });
@@ -232,11 +260,13 @@
       }
       if (r && r.error === 'invalid' && r.errors) {
         if (r.errors.date) { state.date = ''; loadSchedule(); } // 그사이 마감된 날짜 → 달력 새로 고침
-        showErrors(r.errors); return;
+        showErrors(r.errors); track('invalid', 'server:' + Object.keys(r.errors).sort().join(',')); return;
       }
+      track('fail', r && r.error);
       $('formError').textContent = r && r.error === 'busy' ? '신청이 몰리고 있어요. 잠시 후 다시 눌러 주세요.' : '저장하지 못했어요. 다시 눌러 주세요. 계속 안 되면 카카오채널로 신청해 주세요.';
     }).catch(function () {
       $('formError').textContent = '연결이 불안정해 저장을 확인하지 못했어요. 다시 눌러 주세요(중복 예약되지 않아요).';
+      track('fail', 'network');
     }).then(function () {
       state.sending = false; $('btnSubmit').disabled = false; $('btnSubmit').textContent = '수거 신청하기';
       showWait(false);
@@ -246,6 +276,7 @@
   function showPhotoResult(r, up) {
     var dp = $('donePhoto'); dp.hidden = false;
     if (up.sent === up.total) { dp.textContent = '✅ 사진 ' + up.sent + '장이 함께 접수됐어요.'; return; }
+    track('photo_fail', up.sent + '/' + up.total);
     dp.textContent = '사진 일부를 올리지 못했어요. 카카오채널로 예약번호(' + r.reservationId + ')와 함께 옷 사진을 보내 주세요.';
     $('doneKakao').textContent = '카카오채널로 사진 보내기'; $('doneKakao').className = 'ap-submit'; $('doneKakao').style.display = 'flex';
     $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';

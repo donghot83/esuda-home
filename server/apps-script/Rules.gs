@@ -15,7 +15,7 @@
 
   // ---------------------------------------------------------------- 설정 (운영 담당자 확인 후 조정)
   var CONFIG = {
-    version: '2026-11-15c',
+    version: '2026-11-16a',
     minLeadDays: 0,          // 2026-11-15 대표 결정: 당일 예약 받음
     sameDayCutoffHour: 17,   // 당일 예약은 오후 5시(한국 시간) 전까지 — 보통 5시쯤 전체 예약 마감
     dailyCap: 22,            // 하루 최대 예약 수(20~22개). 차면 자동 마감. 급한 고객·양 많은 고객은 직원이 따로 추가
@@ -202,12 +202,18 @@
     if (p.place === '직접 입력' && !String(p.placeDetail || '').trim()) e.placeDetail = '물건 놓을 곳을 적어 주세요.';
     if (ENTRANCE.indexOf(p.entrance) < 0) e.entrance = '공동현관 출입 방법을 골라 주세요.';
     var photoMode = PHOTO_MODES.indexOf(p.photoMode) >= 0 ? p.photoMode : '사진 없이 신청할게요';
-    if (BANKS.indexOf(p.bank) < 0) e.bank = '은행을 골라 주세요.';
-    var acct = digits(p.account);
-    // 2026-11-15 대표 요청: 평생계좌 등 짧은 번호도 받도록 6~20자리로 넓힘 (잘못된 번호는 이체 때 예금주 조회로 걸러짐)
-    if (acct.length < 6 || acct.length > 20) e.account = '계좌번호를 숫자만 6~20자리로 입력해 주세요.';
-    var holder = String(p.holder || '').trim();
-    if (holder.length < 2 || holder.length > 20) e.holder = '예금주를 입력해 주세요.';
+    // 2026-11-16 대표 결정: 계좌는 필수 아님 — '계좌 없이 무상으로 수거해 주세요' 체크, 또는 15kg 미만 선택 시 비워도 됨
+    var acct = digits(p.account), holder = String(p.holder || '').trim();
+    var noPay = p.noPay === true;
+    var emptyPay = !p.bank && !acct && !holder;
+    var payOptional = noPay || (emptyPay && p.amount === AMOUNTS[0]);
+    if (noPay || (payOptional && emptyPay)) { acct = ''; holder = ''; }
+    else {
+      if (BANKS.indexOf(p.bank) < 0) e.bank = emptyPay ? '계좌를 넣거나, 위의 "계좌 없이 무상으로 수거해 주세요"를 체크해 주세요.' : '은행을 골라 주세요.';
+      // 2026-11-15 대표 요청: 평생계좌 등 짧은 번호도 받도록 6~20자리로 넓힘 (잘못된 번호는 이체 때 예금주 조회로 걸러짐)
+      if (acct.length < 6 || acct.length > 20) e.account = '계좌번호를 숫자만 6~20자리로 입력해 주세요.';
+      if (holder.length < 2 || holder.length > 20) e.holder = '예금주를 입력해 주세요.';
+    }
     if (p.agreeNotice !== true) e.agreeNotice = '유의사항 확인에 체크해 주세요.';
     if (p.agreePrivacy !== true) e.agreePrivacy = '개인정보 수집·이용에 동의해 주세요.';
     if (!/^[A-Za-z0-9-]{8,64}$/.test(String(p.submissionId || ''))) e.submissionId = '잘못된 요청이에요. 페이지를 새로고침해 주세요.';
@@ -220,7 +226,8 @@
         zonecode: String(addr.zonecode || ''), roadAddress: String(addr.roadAddress || ''), jibunAddress: String(addr.jibunAddress || ''),
         addressDetail: detail, amount: p.amount === AMOUNT_OTHER ? ('기타: ' + amountDetail) : p.amount, place: p.place, placeDetail: String(p.placeDetail || '').trim().slice(0, 100),
         entrance: p.entrance, entranceCode: String(p.entranceCode || '').trim().slice(0, 40),
-        memo: String(p.memo || '').trim().slice(0, 300), bank: p.bank, account: acct, holder: holder, photoMode: photoMode
+        memo: String(p.memo || '').trim().slice(0, 300), bank: acct ? p.bank : '', account: acct, holder: holder, photoMode: photoMode,
+        noPay: noPay, payNote: noPay ? '무상 희망(계좌 없음)' : (acct ? '' : '계좌 없음')
       } : null
     };
   }
