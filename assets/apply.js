@@ -55,10 +55,10 @@
     return new Promise(function (ok, bad) {
       var img = new Image(), url = URL.createObjectURL(file);
       img.onload = function () {
-        var k = Math.min(1, 1280 / Math.max(img.width, img.height));
+        var k = Math.min(1, 1024 / Math.max(img.width, img.height)); // 2026-11-16: 더 작게(올리는 시간 단축)
         var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-        ok(c.toDataURL('image/jpeg', 0.8));
+        ok(c.toDataURL('image/jpeg', 0.72));
       };
       img.onerror = function () { URL.revokeObjectURL(url); bad(new Error('img')); };
       img.src = url;
@@ -83,8 +83,7 @@
     var list = photos.slice(), done = 0;
     return list.reduce(function (chain, d, i) {
       return chain.then(function () {
-        $('btnSubmit').textContent = '사진 올리는 중… (' + (i + 1) + '/' + list.length + ')';
-        showWait(true, '예약 확정! 사진을 올리는 중이에요 (' + (i + 1) + '/' + list.length + ')');
+        var dp = $('donePhoto'); dp.hidden = false; dp.textContent = '📷 사진 올리는 중… (' + (i + 1) + '/' + list.length + ') — 이 화면을 잠시 닫지 말아 주세요.';
         return api('POST', { action: 'photo', reservationId: r.reservationId, submissionId: p.submissionId, index: i + 1, data: d.split(',')[1] })
           .then(function (x) { if (x && x.ok) done++; }).catch(function () {});
       });
@@ -223,7 +222,12 @@
     showWait(true, '예약을 확정하고 있어요. 잠시만 기다려 주세요…');
     api('POST', p).then(function (r) {
       if (r && r.ok) {
-        if (state.photoMode === R.PHOTO_MODES[0] && photos.length) return uploadPhotos(r, p).then(function (u) { showDone(r, u); });
+        // 확정 화면을 먼저 보여 주고, 사진은 그 화면에서 올림 (2026-11-16: 사진 때문에 오래 기다리던 문제)
+        if (state.photoMode === R.PHOTO_MODES[0] && photos.length) {
+          showDone(r, { pending: true });
+          uploadPhotos(r, p).then(function (u) { showPhotoResult(r, u); });
+          return;
+        }
         showDone(r); return;
       }
       if (r && r.error === 'invalid' && r.errors) {
@@ -239,12 +243,21 @@
     });
   });
 
+  function showPhotoResult(r, up) {
+    var dp = $('donePhoto'); dp.hidden = false;
+    if (up.sent === up.total) { dp.textContent = '✅ 사진 ' + up.sent + '장이 함께 접수됐어요.'; return; }
+    dp.textContent = '사진 일부를 올리지 못했어요. 카카오채널로 예약번호(' + r.reservationId + ')와 함께 옷 사진을 보내 주세요.';
+    $('doneKakao').textContent = '카카오채널로 사진 보내기'; $('doneKakao').className = 'ap-submit'; $('doneKakao').style.display = 'flex';
+    $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';
+  }
+
   function showDone(r, up) {
     var dt = R.parseYmd(r.date);
     $('doneId').textContent = r.reservationId;
     $('doneDate').textContent = (dt.getUTCMonth() + 1) + '월 ' + dt.getUTCDate() + '일 (' + WD[dt.getUTCDay()] + ')';
     $('doneAddr').textContent = (state.address ? state.address.roadAddress : '') + ' ' + $('addrDetail').value;
-    var later = state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length);
+    var later = !(up && up.pending) && (state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length));
+    if (up && up.pending) { $('donePhoto').hidden = false; $('donePhoto').textContent = '📷 사진 올리는 중… — 이 화면을 잠시 닫지 말아 주세요.'; }
     var dp = $('donePhoto');
     if (up && up.sent === up.total) { dp.hidden = false; dp.textContent = '사진 ' + up.sent + '장이 함께 접수됐어요.'; }
     if (later) {

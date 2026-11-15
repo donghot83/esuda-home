@@ -35,29 +35,25 @@ function photo_(b) {
   if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid) || !sid) return { ok: false, error: 'bad_request' };
   if (!(idx >= 1 && idx <= 3)) return { ok: false, error: 'too_many' };
   if (!data || data.length > PHOTO_MAX_B64) return { ok: false, error: 'too_large' };
+  // 2026-11-16: 잠금 없이 확인·파일 저장 → 시트 한 칸 쓸 때만 잠금 (다른 신청을 막지 않게)
+  var sh = sheet_(SHEET_BOOK, BOOK_HEADERS);
+  var v = sh.getDataRange().getValues(), hdr = v[0] || [];
+  if (hdr.indexOf('사진') < 0) hdr = ensureBookHeaders_(sh, BOOK_EXTRA_HEADERS);
+  var cId = hdr.indexOf('예약번호'), cSub = hdr.indexOf('제출ID'), cPh = hdr.indexOf('사진'), row = -1;
+  for (var i = 1; i < v.length; i++) if (String(v[i][cId]) === rid) { row = i; break; }
+  if (row < 0) return { ok: false, error: 'not_found' };
+  if (String(v[row][cSub]) !== sid) return { ok: false, error: 'forbidden' };   // 신청한 화면에서만 올릴 수 있음
+  var name = rid + '_' + idx + '.jpg';
+  if (String(v[row][cPh] || '').indexOf(name) >= 0) return { ok: true, duplicate: true };
+  var file = photoFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', name));
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
+  if (!lock.tryLock(20000)) return { ok: true, url: file.getUrl(), note: 'saved_without_link' };
   try {
-    var sh = sheet_(SHEET_BOOK, BOOK_HEADERS);
-    var hdr = ensureBookHeaders_(sh, BOOK_EXTRA_HEADERS);
-    var v = sh.getDataRange().getValues();
-    var cId = hdr.indexOf('예약번호'), cSub = hdr.indexOf('제출ID'), cPh = hdr.indexOf('사진');
-    for (var i = 1; i < v.length; i++) {
-      if (String(v[i][cId]) !== rid) continue;
-      if (String(v[i][cSub]) !== sid) return { ok: false, error: 'forbidden' };   // 신청한 화면에서만 올릴 수 있음
-      var name = rid + '_' + idx + '.jpg';
-      var prev = String(v[i][cPh] || '');
-      if (prev.indexOf(name) >= 0) return { ok: true, duplicate: true };
-      var blob = Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', name);
-      var file = photoFolder_().createFile(blob);
-      sh.getRange(i + 1, cPh + 1).setValue((prev ? prev + '\n' : '') + name + ' ' + file.getUrl());
-      return { ok: true, url: file.getUrl() };
-    }
-    return { ok: false, error: 'not_found' };
+    var cell = sh.getRange(row + 1, cPh + 1), prev = String(cell.getValue() || '');
+    if (prev.indexOf(name) < 0) cell.setValue((prev ? prev + '\n' : '') + name + ' ' + file.getUrl());
+    return { ok: true, url: file.getUrl() };
   } finally { lock.releaseLock(); }
 }
-
-/** 예약 확정 알림 메일 (실패해도 예약에는 영향 없음) */
 function notifyBooking_(c, rid, countThatDay) {
   var to = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAILS');
   if (!to) return false;

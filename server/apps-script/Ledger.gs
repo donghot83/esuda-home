@@ -250,8 +250,11 @@ function syncLedgerPending() {
       } else waiting++;
     }
     res = { added: added, waiting: waiting };
-    try { refreshLedgerCounts_(); } catch (e) { logError_('장부 줄 수 세기', e); }
   } finally { lock.releaseLock(); }
-  try { if (typeof refreshDashboard === 'function') refreshDashboard(); } catch (e) { logError_('현황판', e); }
+  // 잠금 밖에서 (신청을 막지 않게, 2026-11-16)
+  try { refreshLedgerCounts_(); } catch (e) { logError_('장부 줄 수 세기', e); }
+  // 현황판은 무거워서 15분에 한 번 정도만 (실행 시간 한도 아끼기)
+  var mm = new Date().getMinutes();
+  if (res.added || mm % 15 < 5) { try { if (typeof refreshDashboard === 'function') refreshDashboard(); } catch (e) { logError_('현황판', e); } }
   return res;
 }
