@@ -20,9 +20,26 @@ function makeSheet(name) {
   return sh;
 }
 
+// 장부(다른 스프레드시트)용 가짜 시트: 행 끼워 넣기·칸 쓰기 지원
+function makeGrid(name, rows) {
+  rows = rows || [];
+  const fit = r => { while (rows.length < r) rows.push([]); };
+  return {
+    name, rows,
+    getDataRange() { return { getValues: () => rows.map(r => r.slice()) }; },
+    insertRowsAfter(r, n) { fit(r); rows.splice(r, 0, ...Array.from({ length: n }, () => [])); },
+    insertRowsBefore(r, n) { fit(r - 1); rows.splice(r - 1, 0, ...Array.from({ length: n }, () => [])); },
+    getRange(r, c) { return { setValue(v) { fit(r); rows[r - 1][c - 1] = v; }, copyTo() {} }; }
+  };
+}
+
 function createEnv(opts = {}) {
   const sheets = {};
   const props = { STAFF_TOKEN: opts.staffToken || 'test-token' };
+  if (opts.ledger) props.LEDGER_ID = 'LEDGER';
+  const ledgerSheets = {};
+  Object.entries(opts.ledger || {}).forEach(([n, rows]) => { ledgerSheets[n] = makeGrid(n, rows); });
+  if (opts.ledgerFail) props.LEDGER_ID = 'LEDGER';
   let locked = false;
   const ctx = {
     console,
@@ -31,6 +48,11 @@ function createEnv(opts = {}) {
         getSheetByName: n => sheets[n] || null,
         insertSheet: n => (sheets[n] = makeSheet(n))
       }),
+      openById: id => {
+        if (opts.ledgerFail) throw new Error('ledger unavailable');
+        return { getSheetByName: n => ledgerSheets[n] || null };
+      },
+      CopyPasteType: { PASTE_FORMAT: 'format' },
       flush() {}
     },
     LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }) },
@@ -53,9 +75,10 @@ function createEnv(opts = {}) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Rules.gs'), 'utf8'), ctx, { filename: 'Rules.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Ledger.gs'), 'utf8'), ctx, { filename: 'Ledger.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
-    ctx, sheets,
+    ctx, sheets, ledger: ledgerSheets,
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],

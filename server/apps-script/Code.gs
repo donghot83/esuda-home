@@ -147,6 +147,15 @@ function submit_(p) {
     // 숫자로 바뀌지 않게(앞자리 0 보존) 문자열로 저장
     sh.appendRow(hdr.map(function (h) { var x = row[h]; return (h === '연락처' || h === '계좌번호' || h === '우편번호') ? "'" + x : (x === undefined ? '' : x); }));
     SpreadsheetApp.flush();
+    // 장부 자동 입력 — 실패해도 예약은 확정 유지('대기'로 남고 syncLedgerPending 이 다시 시도)
+    try {
+      var lg = ledgerAppend_(c, rid);
+      if (lg.ok) {
+        var newRow = data.length + 1;
+        sh.getRange(newRow, hdr.indexOf('장부반영') + 1).setValue('완료');
+        sh.getRange(newRow, hdr.indexOf('장부반영시각') + 1).setValue(now);
+      }
+    } catch (err) { /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
     return { ok: true, duplicate: false, reservationId: rid, date: c.date };
   } finally {
     lock.releaseLock();

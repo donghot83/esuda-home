@@ -8,10 +8,11 @@
 |---|---|---|---|
 | 신청 화면 | `apply/index.html`, `assets/apply.css`, `assets/apply.js` | 주소 검색 → 그 주소의 수거 가능한 날짜 → 수거 정보·계좌·동의 → 예약번호 표시 | 무료 (GitHub Pages) |
 | 주소 검색 | 카카오 우편번호 서비스 (`t1.kakaocdn.net`) | 도로명 주소 선택 | 무료, 키 없음 |
-| 예약 규칙 | `assets/apply-rules.js` (= `server/apps-script/Rules.gs`) | 주소 분류(한강 남=홀수, 북=짝수, 김포 홀수, 일산 짝수), 주말·마감·당일 차단, 신청 검사 | — |
+| 예약 규칙 | `assets/apply-rules.js` (= `server/apps-script/Rules.gs`) | 주소 분류(한강 남=홀수, 북=짝수, 김포 홀수, 일산·덕양 짝수), 주말·직원 마감, 당일 예약은 한국 시간 오후 5시까지, 하루 22건 차면 자동 마감, 신청 검사 | — |
 | 예약 서버 | `server/apps-script/Code.gs` (Google Apps Script 웹 앱) | 서버에서 다시 검사 → 구글 시트에 저장 → 확정·예약번호 반환, 같은 제출 재시도 시 중복 없음 | 무료 (회사 구글 계정) |
 | 예약 장부(DB) | 구글 시트 `예약` / `마감` / `주말예외` | 예약 확정 여부·장부 반영 여부 표시, 직원이 마감 날짜 입력 | 무료 |
-| 장부 반영 | (대표 PC, 저장소 밖) `ledger_sync/ledger_sync.py` | `장부반영=대기` 예약을 v2.1 `①오늘수거`에 예약번호 기준 1줄씩 추가 | 무료 |
+| 장부 자동 입력 | `server/apps-script/Ledger.gs` | 확정 즉시 구글 시트 장부 `N월 매입금액`의 예약 칸에 날짜별로 1줄(날짜·이름·지역구·주소, K열 메모에 예약번호·수거양·요청). 연락처·계좌·현관 비번은 넣지 않음. 해당 달 시트가 없거나 장부를 못 열면 `대기`로 두고 `syncLedgerPending`(10분 트리거)이 다시 넣음, 예약번호로 중복 방지 | 무료 |
+| (예비) 장부 반영 | (대표 PC, 저장소 밖) `ledger_sync/ledger_sync.py` | 엑셀 장부용 예비 경로 | 무료 |
 
 ## 개인정보·보안
 - 이 저장소는 **공개**다. 고객 정보, 시트 ID, 토큰을 커밋하지 않는다.
@@ -21,8 +22,9 @@
 
 ## 배포 순서 (대표 승인 후, 대표 구글 계정으로)
 1. 구글 드라이브에서 새 스프레드시트 만들기 → 확장 프로그램 → Apps Script.
-2. `Code.gs`, `Rules.gs` 내용을 붙여넣기 → 프로젝트 설정 → 시간대 `Asia/Seoul`.
-3. 프로젝트 설정 → 스크립트 속성 `STAFF_TOKEN` = 긴 임의 문자열 (대표 PC의 토큰 파일에만 보관).
+2. `Code.gs`, `Rules.gs`, `Ledger.gs` 내용을 붙여넣기 → 프로젝트 설정 → 시간대 `Asia/Seoul`.
+3. 프로젝트 설정 → 스크립트 속성 `STAFF_TOKEN` = 긴 임의 문자열 (대표 PC의 토큰 파일에만 보관), `LEDGER_ID` = 장부 스프레드시트 ID (**시험 때는 장부 사본 ID**).
+3-1. 트리거 → `syncLedgerPending` 시간 기반 10분마다.
 4. 배포 → 새 배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자 → 웹 앱 URL 복사.
 5. `assets/apply-config.js`의 `apiUrl`에 URL 입력 → 가상 데이터로 시험 신청 → 시트에서 확인.
 6. 대표 승인 → `main` 합치기(배포) → 휴대폰 카카오톡 안에서 시험.
@@ -36,6 +38,6 @@
 ## 테스트
 ```
 python tools/sync_rules.py      # 규칙을 고쳤을 때
-node --test tests/*.test.js     # 규칙 13 + 서버 9
+node --test tests/*.test.js     # 규칙·서버·장부 자동 입력 32개
 node tools/mock_server.js       # http://localhost:8787/apply/ (가짜 서버·가상 데이터)
 ```
