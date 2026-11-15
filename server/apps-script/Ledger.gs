@@ -35,8 +35,9 @@ function ledgerAddress_(c) {
   return (parts.join(' ') + ' ' + String(c.addressDetail || '')).trim();
 }
 
-function cellYmd_(v) {
-  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+// 장부 파일의 시간대(예: 가져온 파일은 GMT)로 날짜를 읽고 써야 하루 밀리지 않는다 (2026-11-15 실제 시험에서 발견)
+function cellYmd_(v, tz) {
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz || 'Asia/Seoul', 'yyyy-MM-dd');
   var s = String(v || '').trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
 }
@@ -48,14 +49,16 @@ function cellYmd_(v) {
 function ledgerAppend_(c, rid) {
   var id = PropertiesService.getScriptProperties().getProperty('LEDGER_ID');
   if (!id) return { ok: false, reason: 'no_ledger' };
-  var sh = ledgerMonthSheet_(SpreadsheetApp.openById(id), c.date);
+  var lss = SpreadsheetApp.openById(id);
+  var tz = lss.getSpreadsheetTimeZone() || 'GMT'; // 가져온 파일은 시간대가 비어 있고 실제로는 GMT로 저장됨
+  var sh = ledgerMonthSheet_(lss, c.date);
   if (!sh) return { ok: false, reason: 'no_month_sheet' };
   var v = sh.getDataRange().getValues();
   var ym = c.date.slice(0, 7);
   var last = -1, lastDate = '', firstAfter = -1;
   for (var i = 1; i < v.length; i++) {
     if (String(v[i][LEDGER_COL.memo - 1] || '').indexOf(rid) >= 0) return { ok: true, duplicate: true }; // 이미 들어감
-    var d = cellYmd_(v[i][LEDGER_COL.date - 1]);
+    var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
     if (!d || d.slice(0, 7) !== ym) continue;            // 다른 달(아래쪽 월별 요약표 등)은 건너뜀
     if (d <= c.date) { last = i; lastDate = d; }
     else if (firstAfter < 0) firstAfter = i;
@@ -76,8 +79,7 @@ function ledgerAppend_(c, rid) {
   } else {                                           // 이 달 시트가 비어 있음: 머리글 바로 아래
     sh.insertRowsAfter(1, 1); at = 2;
   }
-  var y = +c.date.slice(0, 4), mo = +c.date.slice(5, 7), dd = +c.date.slice(8, 10);
-  sh.getRange(at, LEDGER_COL.date).setValue(new Date(y, mo - 1, dd));
+  sh.getRange(at, LEDGER_COL.date).setValue(c.date); // 'YYYY-MM-DD' 글자 → 시트가 자기 시간대로 그날 날짜로 바꿈(시간대 차이로 하루 밀리지 않음)
   sh.getRange(at, LEDGER_COL.name).setValue(c.name);
   sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));

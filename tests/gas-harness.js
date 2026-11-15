@@ -50,7 +50,7 @@ function createEnv(opts = {}) {
       }),
       openById: id => {
         if (opts.ledgerFail) throw new Error('ledger unavailable');
-        return { getSheetByName: n => ledgerSheets[n] || null };
+        return { getSheetByName: n => ledgerSheets[n] || null, getSpreadsheetTimeZone: () => opts.ledgerTz || 'Asia/Seoul' };
       },
       CopyPasteType: { PASTE_FORMAT: 'format' },
       flush() {}
@@ -62,8 +62,14 @@ function createEnv(opts = {}) {
       createTextOutput: s => ({ text: s, setMimeType() { return this; } })
     },
     Utilities: {
+      // 시간대: 'Asia/Seoul'=+9, 'GMT'=0 만 흉내 (테스트용)
+      parseDate(s, tz, f) {
+        const off = tz === 'GMT' ? 0 : 9;
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d) - off * 3600e3);
+      },
       formatDate(d, tz, f) {
-        const k = new Date(d.getTime() + 9 * 3600e3);
+        const k = new Date(d.getTime() + (tz === 'GMT' ? 0 : 9) * 3600e3);
         const p = n => String(n).padStart(2, '0');
         const ymd = `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())}`;
         return f === 'yyyy-MM-dd' ? ymd : `${ymd} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}:${p(k.getUTCSeconds())}`;

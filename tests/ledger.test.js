@@ -99,3 +99,20 @@ test('장부 ID가 설정되지 않으면 장부 입력은 건너뜀(기존 동�
   assert.strictEqual(env.post(sub()).ok, true);
   const b = env.sheet('예약').rows; assert.strictEqual(b[1][b[0].indexOf('장부반영')], '대기');
 });
+
+test('장부 시간대가 GMT여도(구글로 가져온 파일) 날짜가 하루 밀리지 않음 — 2026-11-15 실제 시험 버그 재현', () => {
+  const G = s => new Date(s + 'T00:00:00Z'); // GMT 시트의 날짜 칸 = 그날 GMT 0시
+  const env = createEnv({ now: NOW, ledgerTz: 'GMT', ledger: { '11월 매입금액': [
+    HEAD,
+    [null, G('2026-11-17'), '가상X', '강남구', '가상로 9'],
+    [],
+    [null, G('2026-11-18'), '가상Y', '고양시', '덕양구 가상로 8'],
+    [],
+    [null, G('2026-07-14'), '수거 양(kg)']
+  ] } });
+  assert.strictEqual(env.post(sub({ date: '2026-11-18' })).ok, true);
+  const sh = env.ledger['11월 매입금액'];
+  const i = names(sh).indexOf('신청고객');
+  assert.strictEqual(i, 4, names(sh).join('|'));                 // 11/18 묶음(가상Y) 바로 아래
+  assert.strictEqual(sh.rows[i][1], '2026-11-18'); // 날짜는 글자로 넣어 시트가 그날로 해석
+});
