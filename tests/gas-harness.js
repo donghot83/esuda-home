@@ -79,6 +79,7 @@ function createEnv(opts = {}) {
   const created = [];
   const drive = { folders: {}, files: [] };
   const mails = [];
+  const fetches = [];
   Object.entries(opts.ledger || {}).forEach(([n, rows]) => { ledgerSheets[n] = makeGrid(n, rows); });
   if (opts.ledgerFail) props.LEDGER_ID = 'LEDGER';
   let locked = false;
@@ -109,6 +110,8 @@ function createEnv(opts = {}) {
         drive.folders[id] = f; return f; }
     },
     MailApp: { sendEmail: m => { mails.push(m); } },
+    UrlFetchApp: { fetch: (url, o) => { fetches.push({ url, o, body: JSON.parse(o.payload) }); const r = opts.fetchReply || { code: 200, body: { failedMessageList: [] } };
+      return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; } },
     ScriptApp: { getProjectTriggers: () => (opts.noTrigger ? [] : [{ getHandlerFunction: () => 'syncLedgerPending' }]) },
     Logger: { log() {} },
     ContentService: {
@@ -117,6 +120,8 @@ function createEnv(opts = {}) {
     },
     Utilities: {
       base64Decode: d => Array.from(Buffer.from(d, 'base64')),
+      getUuid: () => require('crypto').randomUUID(),
+      computeHmacSha256Signature: (v, k) => Array.from(require('crypto').createHmac('sha256', k).update(v).digest()).map(b => (b > 127 ? b - 256 : b)),
       newBlob: (bytes, type, name) => ({ bytes, type, name }),
       // 시간대: 'Asia/Seoul'=+9, 'GMT'=0 만 흉내 (테스트용)
       parseDate(s, tz, f) {
@@ -142,9 +147,10 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Notify.gs'), 'utf8'), ctx, { filename: 'Notify.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Report.gs'), 'utf8'), ctx, { filename: 'Report.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Driver.gs'), 'utf8'), ctx, { filename: 'Driver.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Alimtalk.gs'), 'utf8'), ctx, { filename: 'Alimtalk.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
-    ctx, sheets, ledger: ledgerSheets, otherLedgers, props, created, drive, mails,
+    ctx, sheets, ledger: ledgerSheets, otherLedgers, props, created, drive, mails, fetches,
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],

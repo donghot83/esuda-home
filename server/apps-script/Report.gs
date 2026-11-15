@@ -166,6 +166,7 @@ function dailyReport() {
     chk.ok.map(function (s) { return '✅ ' + s; }).join('\n'),
     '',
     (function () { var y = R.addDays(chk.today, -1), s = driverSummary_(y); return '■ 어제 ' + dayLabel_(y) + ' 기사님 체크: 완료 ' + s.done + '건' + (s.fail ? ', 못함 ' + s.fail + '건' : '') + ' / 장부 ' + (chk.counts[y] || 0) + '건'; })(),
+    (function () { var a = alimStatus_(); return '■ 알림톡: ' + (a.on ? '켜짐' : '꺼짐') + (a.missing.length ? ' (준비 남음: ' + a.missing.join(', ') + ')' : ''); })(),
     '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)',
     '■ 내일 ' + dayLabel_(t.date) + ' 수거: 전체 ' + t.total + '건 (신청페이지 ' + t.page + '건' + (areas ? ': ' + areas : '') + ')',
     '■ 앞으로 7일 (장부 포함): ' + next7.join(' / '),

@@ -196,6 +196,7 @@ function submit_(p) {
       }
     } catch (err) { logError_('장부 입력', err); /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
     try { notifyBooking_(c, rid, countsByDate_(sh.getDataRange().getValues())[c.date] || 1); } catch (err) { logError_('알림 메일', err); }
+    try { alimBooked_(c, rid); } catch (err) { logError_('알림톡(예약 완료)', err); }
     return { ok: true, duplicate: false, reservationId: rid, date: c.date };
   } finally {
     lock.releaseLock();

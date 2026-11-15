@@ -102,8 +102,10 @@ function driverMark_(b) {
   try {
     var sh = sheet_(SHEET_DRIVER, DRIVER_LOG_HEADERS);
     sh.appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
-    return { ok: true };
   } finally { lock.releaseLock(); }
+  // 픽업 완료 알림톡 (신청페이지 예약만, 같은 예약은 한 번만)
+  if (state === '완료' && /^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) { try { alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); } }
+  return { ok: true };
 }
 
 /** 점검 메일용: 그날 완료/못함/전체 */

@@ -97,7 +97,7 @@ function makeTransferFile(opts) {
       if (!lr) { skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
       var pa = payAmount_(lr, unit);
       if (!pa.ok) { skipped.push({ 예약번호: rid, 이유: pa.reason }); continue; }
-      if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거' }); continue; }
+      if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거', rid: rid, lr: lr }); continue; }
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
       if (!code || acct.length < 6) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
@@ -129,6 +129,7 @@ function makeTransferFile(opts) {
     marks.forEach(function (m) {
       sh.getRange(m.row, col('지급상태') + 1).setValue(m.state);
       if (m.state === '이체파일생성') sh.getRange(m.row, col('이체파일') + 1).setValue(fileName);
+      if (m.state === '무상수거') { try { alimSettled_(m.rid, m.lr, 0); } catch (e) { logError_('알림톡(무상수거)', e); } }
     });
     return res;
   } finally { lock.releaseLock(); }
@@ -146,6 +147,11 @@ function markTransferPaid(fileName) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][cF]) === String(fileName) && String(data[i][cS]) === '이체파일생성') {
       sh.getRange(i + 1, cS + 1).setValue('입금완료'); sh.getRange(i + 1, cD + 1).setValue(today); n++;
+      try { // 입금 완료 알림톡
+        var rid = String(data[i][hdr.indexOf('예약번호')]), d = fmtDate_(data[i][hdr.indexOf('수거일')]);
+        var lr = ledgerRowFor_(null, d, rid), pa = lr && payAmount_(lr, transferUnitPrice_());
+        if (pa && pa.ok && pa.amount > 0) alimSettled_(rid, lr, pa.amount);
+      } catch (e) { logError_('알림톡(입금 완료)', e); }
     }
   }
   return { updated: n };
