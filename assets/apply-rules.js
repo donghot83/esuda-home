@@ -14,10 +14,12 @@
 
   // ---------------------------------------------------------------- 설정 (운영 담당자 확인 후 조정)
   var CONFIG = {
-    version: '2026-11-14b',
-    minLeadDays: 1,        // 임시값: 당일 예약 여부 미확정 (2026-11-14)
-    horizonDays: 21,       // 임시값: 예약 가능 기간 미확정 (2026-11-14)
-    closedWeekdays: [0, 6] // 0=일, 6=토 — 주말 기본 마감 (대표 예외는 openDates 로)
+    version: '2026-11-15a',
+    minLeadDays: 0,          // 2026-11-15 대표 결정: 당일 예약 받음
+    sameDayCutoffHour: 17,   // 당일 예약은 오후 5시(한국 시간) 전까지 — 보통 5시쯤 전체 예약 마감
+    dailyCap: 22,            // 하루 최대 예약 수(20~22개). 차면 자동 마감. 급한 고객·양 많은 고객은 직원이 따로 추가
+    horizonDays: 60,         // 2026-11-15 대표 결정: 예약은 다 받음 → 달력은 약 두 달치 표시
+    closedWeekdays: [0, 6]   // 0=일, 6=토 — 주말 기본 마감 (대표 예외는 openDates 로)
   };
 
   // 한강 기준: south = 홀수일, north = 짝수일
@@ -90,6 +92,10 @@
     var t = (now ? now.getTime() : Date.now()) + 9 * 3600 * 1000;
     return ymd(new Date(t));
   }
+  /** 지금 시각 → 한국 시간 '시'(0~23) */
+  function hourKST(now) {
+    return new Date((now ? now.getTime() : Date.now()) + 9 * 3600 * 1000).getUTCHours();
+  }
 
   /**
    * 마감 목록: [{start:'YYYY-MM-DD', end:'YYYY-MM-DD'?, zone:'all'|'south'|'north'?, message?}]
@@ -109,16 +115,17 @@
   }
 
   /**
-   * 하루 판정. opts = {today, closures, openDates, config}
-   * 반환: {open:boolean, reason:'ok'|'invalid'|'past'|'lead'|'horizon'|'parity'|'weekend'|'closed', message?}
+   * 하루 판정. opts = {today, now(Date), closures, openDates, counts:{'YYYY-MM-DD':예약수}, config}
+   * 반환: {open:boolean, reason:'ok'|'invalid'|'past'|'lead'|'cutoff'|'horizon'|'parity'|'weekend'|'closed'|'full', message?}
    */
   function checkDate(dateStr, zone, opts) {
     opts = opts || {};
     var cfg = opts.config || CONFIG;
     var d = parseYmd(dateStr);
     if (!d || !PARITY[zone]) return { open: false, reason: 'invalid' };
-    var today = opts.today || todayKST();
+    var today = opts.today || todayKST(opts.now);
     if (dateStr < addDays(today, cfg.minLeadDays)) return { open: false, reason: dateStr < today ? 'past' : 'lead' };
+    if (dateStr === today && cfg.sameDayCutoffHour != null && hourKST(opts.now) >= cfg.sameDayCutoffHour) return { open: false, reason: 'cutoff' };
     if (dateStr > addDays(today, cfg.horizonDays)) return { open: false, reason: 'horizon' };
     var day = d.getUTCDate();
     var want = PARITY[zone];
@@ -127,16 +134,18 @@
     if (c) return { open: false, reason: 'closed', message: c.message || '' };
     var openDates = opts.openDates || [];
     if (cfg.closedWeekdays.indexOf(d.getUTCDay()) >= 0 && openDates.indexOf(dateStr) < 0) return { open: false, reason: 'weekend' };
+    var n = (opts.counts && +opts.counts[dateStr]) || 0;
+    if (cfg.dailyCap && n >= cfg.dailyCap) return { open: false, reason: 'full' };
     return { open: true, reason: 'ok' };
   }
 
-  /** 달력용: today+1 ~ today+horizon 의 각 날짜 판정 */
+  /** 달력용: today+minLead ~ today+horizon 의 각 날짜 판정 */
   function calendar(zone, opts) {
     opts = opts || {};
     var cfg = opts.config || CONFIG;
-    var today = opts.today || todayKST();
+    var today = opts.today || todayKST(opts.now);
     var out = [];
-    for (var i = 1; i <= cfg.horizonDays; i++) {
+    for (var i = cfg.minLeadDays; i <= cfg.horizonDays; i++) {
       var s = addDays(today, i);
       var r = checkDate(s, zone, opts);
       out.push({ date: s, open: r.open, reason: r.reason, message: r.message || '' });
@@ -148,7 +157,9 @@
   var BANKS = ['신한은행', 'KB국민은행', '우리은행', '하나은행', 'NH농협은행', 'IBK기업은행', '카카오뱅크', '토스뱅크',
                '새마을금고', '우체국', 'SC제일은행', '부산은행', '대구은행', '경남은행', '광주은행', '전북은행',
                '수협은행', '신협', '케이뱅크', '씨티은행', '산림조합', '저축은행'];
-  var AMOUNTS = ['15kg 미만 (무상수거)', '15kg 이상 (50L 봉투 3개 정도)', '30kg 이상 (50L 봉투 6개 정도)', '50kg 이상', '잘 모르겠어요'];
+  // 2026-11-15 대표 결정: 15kg 기준 두 가지 + 기타(직접 입력)
+  var AMOUNTS = ['15kg 미만 (무상수거)', '15kg 이상', '기타 (직접 입력)'];
+  var AMOUNT_OTHER = '기타 (직접 입력)';
   var PLACES = ['문 앞에 놓아둘게요', '직접 입력'];
   var ENTRANCE = ['공동현관 비밀번호', '자유 출입 가능', '경비실 호출'];
 
@@ -172,9 +183,14 @@
     if (detail.length < 1 || detail.length > 60) e.addressDetail = '동·호수 등 상세주소를 입력해 주세요. (단독주택은 "단독"이라고 적어 주세요)';
     if (cls.ok) {
       var dr = checkDate(p.date, cls.zone, opts);
-      if (!dr.open) e.date = dr.reason === 'closed' ? ('선택한 날짜는 예약이 마감됐어요. ' + (dr.message || '다른 날짜를 골라 주세요.')) : '선택할 수 없는 날짜예요. 다른 날짜를 골라 주세요.';
+      if (!dr.open) e.date = dr.reason === 'closed' ? ('선택한 날짜는 예약이 마감됐어요. ' + (dr.message || '다른 날짜를 골라 주세요.'))
+        : dr.reason === 'full' ? '선택한 날짜는 예약이 다 찼어요. 다른 날짜를 골라 주세요. (급하시면 카카오채널로 문의해 주세요)'
+        : dr.reason === 'cutoff' ? '오늘 수거 신청은 오후 5시에 마감됐어요. 다른 날짜를 골라 주세요.'
+        : '선택할 수 없는 날짜예요. 다른 날짜를 골라 주세요.';
     }
+    var amountDetail = String(p.amountDetail || '').trim().slice(0, 100);
     if (AMOUNTS.indexOf(p.amount) < 0) e.amount = '수거 양을 골라 주세요.';
+    else if (p.amount === AMOUNT_OTHER && !amountDetail) e.amountDetail = '수거 양이나 물품을 적어 주세요. (예: 큰 이불가방 2개, 신발 10켤레)';
     if (PLACES.indexOf(p.place) < 0) e.place = '물건 놓을 곳을 골라 주세요.';
     if (p.place === '직접 입력' && !String(p.placeDetail || '').trim()) e.placeDetail = '물건 놓을 곳을 적어 주세요.';
     if (ENTRANCE.indexOf(p.entrance) < 0) e.entrance = '공동현관 출입 방법을 골라 주세요.';
@@ -193,7 +209,7 @@
         submissionId: p.submissionId, name: name, phone: phone, date: p.date, zone: cls.zone,
         sido: String(addr.sido || ''), sigungu: String(addr.sigungu || ''), bname: String(addr.bname || ''),
         zonecode: String(addr.zonecode || ''), roadAddress: String(addr.roadAddress || ''), jibunAddress: String(addr.jibunAddress || ''),
-        addressDetail: detail, amount: p.amount, place: p.place, placeDetail: String(p.placeDetail || '').trim().slice(0, 100),
+        addressDetail: detail, amount: p.amount === AMOUNT_OTHER ? ('기타: ' + amountDetail) : p.amount, place: p.place, placeDetail: String(p.placeDetail || '').trim().slice(0, 100),
         entrance: p.entrance, entranceCode: String(p.entranceCode || '').trim().slice(0, 40),
         memo: String(p.memo || '').trim().slice(0, 300), bank: p.bank, account: acct, holder: holder
       } : null
@@ -207,9 +223,9 @@
 
   return {
     CONFIG: CONFIG, PARITY: PARITY, ZONES: ZONES, EXCEPTIONS: EXCEPTIONS,
-    BANKS: BANKS, AMOUNTS: AMOUNTS, PLACES: PLACES, ENTRANCE: ENTRANCE,
+    BANKS: BANKS, AMOUNTS: AMOUNTS, AMOUNT_OTHER: AMOUNT_OTHER, PLACES: PLACES, ENTRANCE: ENTRANCE,
     classifyAddress: classifyAddress, checkDate: checkDate, calendar: calendar, closureFor: closureFor,
     validateApplication: validateApplication, reservationId: reservationId,
-    todayKST: todayKST, addDays: addDays, parseYmd: parseYmd, digits: digits
+    todayKST: todayKST, hourKST: hourKST, addDays: addDays, parseYmd: parseYmd, digits: digits
   };
 });

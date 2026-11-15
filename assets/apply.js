@@ -44,7 +44,7 @@
       box.appendChild(b);
     });
   }
-  chips('amount', R.AMOUNTS);
+  chips('amount', R.AMOUNTS, function (t) { $('amountDetailWrap').hidden = t !== R.AMOUNT_OTHER; });
   chips('place', R.PLACES, function (t) { $('placeDetailWrap').hidden = t !== '직접 입력'; });
   chips('entrance', R.ENTRANCE, function (t) { $('entranceCodeWrap').hidden = t !== '공동현관 비밀번호'; });
   R.BANKS.forEach(function (b) { var o = document.createElement('option'); o.value = b; o.textContent = b; $('bank').appendChild(o); });
@@ -103,7 +103,7 @@
     note.hidden = true;
     if (!state.cls || !state.cls.ok) { hint.hidden = false; hint.textContent = state.cls ? '이 주소는 카카오채널로 신청해 주세요.' : '주소를 먼저 선택해 주세요.'; return; }
     var sc = state.schedule;
-    var cal = R.calendar(state.cls.zone, { today: sc.today, closures: sc.closures, openDates: sc.openDates });
+    var cal = R.calendar(state.cls.zone, { today: sc.today, now: new Date(), closures: sc.closures, openDates: sc.openDates, counts: sc.counts });
     var msgs = {};
     cal.forEach(function (d) { if (d.reason === 'closed' && d.message) msgs[d.message] = 1; });
     var m = Object.keys(msgs);
@@ -115,7 +115,7 @@
       var dt = R.parseYmd(d.date);
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'ap-date' + (state.date === d.date ? ' on' : '');
-      b.innerHTML = '<b>' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate() + '</b><small>' + WD[dt.getUTCDay()] + '요일</small>';
+      b.innerHTML = '<b>' + (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate() + '</b><small>' + (d.date === sc.today ? '오늘 (5시 마감)' : WD[dt.getUTCDay()] + '요일') + '</small>';
       b.addEventListener('click', function () { state.date = d.date; clearErr('date'); renderDates(); });
       box.appendChild(b);
     });
@@ -123,7 +123,7 @@
 
   function loadSchedule() {
     return api('GET', null, 'action=schedule').then(function (r) {
-      if (r && r.ok) state.schedule = { closures: r.closures || [], openDates: r.openDates || [], today: r.today || R.todayKST() };
+      if (r && r.ok) state.schedule = { closures: r.closures || [], openDates: r.openDates || [], counts: r.counts || {}, today: r.today || R.todayKST() };
       renderDates();
     }).catch(function () { renderDates(); });
   }
@@ -148,7 +148,7 @@
     return {
       action: 'submit', submissionId: submissionId(),
       name: $('name').value, phone: $('phone').value, address: state.address || {}, addressDetail: $('addrDetail').value,
-      date: state.date, amount: state.amount, place: state.place, placeDetail: $('placeDetail').value,
+      date: state.date, amount: state.amount, amountDetail: $('amountDetail').value, place: state.place, placeDetail: $('placeDetail').value,
       entrance: state.entrance, entranceCode: $('entranceCode').value, memo: $('memo').value,
       bank: $('bank').value, account: $('account').value, holder: $('holder').value,
       agreeNotice: $('agreeNotice').checked, agreePrivacy: $('agreePrivacy').checked
@@ -160,7 +160,7 @@
     if (state.sending) return;
     clearAll();
     var p = payload();
-    var v = R.validateApplication(p, { today: state.schedule.today, closures: state.schedule.closures, openDates: state.schedule.openDates });
+    var v = R.validateApplication(p, { today: state.schedule.today, now: new Date(), closures: state.schedule.closures, openDates: state.schedule.openDates, counts: state.schedule.counts });
     if (!v.ok) { showErrors(v.errors); return; }
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
     api('POST', p).then(function (r) {

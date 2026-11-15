@@ -62,6 +62,18 @@ function loadSchedule_() {
   return { closures: closures, openDates: openDates };
 }
 
+/** 날짜별 확정 예약 수 {'YYYY-MM-DD': n} — 하루 한도 자동 마감용 (숫자만, 고객 정보 없음) */
+function countsByDate_(data) {
+  if (!data) data = sheet_(SHEET_BOOK, BOOK_HEADERS).getDataRange().getValues();
+  var hdr = data[0] || [], cDate = hdr.indexOf('수거일'), cSt = hdr.indexOf('확정상태'), out = {};
+  for (var i = 1; i < data.length; i++) {
+    if (cSt >= 0 && String(data[i][cSt]) !== '확정') continue;
+    var d = fmtDate_(data[i][cDate]);
+    if (d) out[d] = (out[d] || 0) + 1;
+  }
+  return out;
+}
+
 function rand4_() {
   var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
   for (var i = 0; i < 4; i++) s += a.charAt(Math.floor(Math.random() * a.length));
@@ -74,7 +86,8 @@ function doGet(e) {
   try {
     if (p.action === 'schedule') {
       var sc = loadSchedule_();
-      return json_({ ok: true, today: rules_().todayKST(new Date()), closures: sc.closures, openDates: sc.openDates, rulesVersion: rules_().CONFIG.version });
+      var nowD = new Date();
+      return json_({ ok: true, today: rules_().todayKST(nowD), hour: rules_().hourKST(nowD), closures: sc.closures, openDates: sc.openDates, counts: countsByDate_(), rulesVersion: rules_().CONFIG.version });
     }
     return json_({ ok: false, error: 'unknown_action' });
   } catch (err) {
@@ -115,7 +128,8 @@ function submit_(p) {
       }
     }
     var sc = loadSchedule_();
-    var v = R.validateApplication(p, { today: R.todayKST(new Date()), closures: sc.closures, openDates: sc.openDates });
+    var nowD = new Date();
+    var v = R.validateApplication(p, { today: R.todayKST(nowD), now: nowD, closures: sc.closures, openDates: sc.openDates, counts: countsByDate_(data) });
     if (!v.ok) return { ok: false, error: 'invalid', errors: v.errors };
     var c = v.clean;
     var ids = {};

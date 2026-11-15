@@ -96,3 +96,22 @@ test('Rules.gs 는 assets/apply-rules.js 와 같은 내용', () => {
   const gs = fs.readFileSync(path.join(__dirname, '../server/apps-script/Rules.gs'), 'utf8');
   assert.ok(gs.endsWith(js.replace(/\r\n/g, '\n')) || gs.endsWith(js), 'tools/sync_rules.py 를 실행하세요');
 });
+
+test('하루 한도: 같은 날 확정 22건이 차면 23번째는 거부, 달력용 예약 수 공개(숫자만)', () => {
+  const env = createEnv({ now: NOW });
+  for (let i = 0; i < 22; i++) assert.strictEqual(env.post(good()).ok, true);
+  const r = env.post(good());
+  assert.strictEqual(r.ok, false); assert.match(r.errors.date, /다 찼어요/);
+  assert.strictEqual(env.sheet('예약').rows.length, 23);
+  const s = env.get({ action: 'schedule' });
+  assert.strictEqual(s.counts['2026-11-18'], 22);
+  assert.ok(!JSON.stringify(s).includes('테스트고객')); // 고객 정보는 나가지 않음
+});
+
+test('당일 예약: 서버도 한국 시간 오후 5시 이후 당일 신청을 거부', () => {
+  const before = createEnv({ now: '2026-11-18T07:00:00Z' }); // 한국 16:00 (수, 짝수)
+  assert.strictEqual(before.post(good()).ok, true);
+  const after = createEnv({ now: '2026-11-18T08:00:00Z' });  // 한국 17:00
+  const r = after.post(good());
+  assert.strictEqual(r.ok, false); assert.match(r.errors.date, /오후 5시/);
+});

@@ -35,16 +35,42 @@ test('주소 분류: 동 단위 예외가 구 단위보다 우선', () => {
   assert.strictEqual(R.classifyAddress(addr('서울', '마포구', '합정동'), null, ex).parity, 'even');
 });
 
-test('날짜: 남쪽은 홀수일만, 북쪽은 짝수일만, 주말·당일·지난날 닫힘', () => {
+test('날짜: 남쪽은 홀수일만, 북쪽은 짝수일만, 주말·지난날 닫힘', () => {
   const o = { today: TODAY };
   assert.strictEqual(R.checkDate('2026-11-17', 'south', o).open, true);   // 화 17 홀수
   assert.strictEqual(R.checkDate('2026-11-17', 'north', o).reason, 'parity');
   assert.strictEqual(R.checkDate('2026-11-18', 'north', o).open, true);   // 수 18 짝수
   assert.strictEqual(R.checkDate('2026-11-15', 'south', o).reason, 'weekend'); // 일 15 홀수지만 주말
-  assert.strictEqual(R.checkDate('2026-11-14', 'north', o).reason, 'lead');
   assert.strictEqual(R.checkDate('2026-11-10', 'north', o).reason, 'past');
-  assert.strictEqual(R.checkDate('2026-12-31', 'south', o).reason, 'horizon');
+  assert.strictEqual(R.checkDate('2027-02-01', 'south', o).reason, 'horizon'); // 약 두 달 뒤까지만 달력 표시
   assert.strictEqual(R.checkDate('2026-02-30', 'south', o).reason, 'invalid');
+});
+
+test('당일 예약: 오후 5시(한국 시간) 전에는 열림, 5시부터 닫힘', () => {
+  const day = '2026-11-17'; // 화, 홀수
+  const at = h => new Date(Date.UTC(2026, 10, 17, h - 9, 0)); // 한국 h시
+  assert.strictEqual(R.checkDate(day, 'south', { today: day, now: at(10) }).open, true);
+  assert.strictEqual(R.checkDate(day, 'south', { today: day, now: at(16) }).open, true);
+  assert.strictEqual(R.checkDate(day, 'south', { today: day, now: at(17) }).reason, 'cutoff');
+  const v = R.validateApplication(Object.assign(good(), { date: day }), { today: day, now: at(18) });
+  assert.match(v.errors.date, /오후 5시/);
+});
+
+test('하루 한도: 확정 22건이 차면 그날 자동 마감', () => {
+  const o = c => ({ today: TODAY, counts: { '2026-11-17': c } });
+  assert.strictEqual(R.checkDate('2026-11-17', 'south', o(21)).open, true);
+  assert.strictEqual(R.checkDate('2026-11-17', 'south', o(22)).reason, 'full');
+  const v = R.validateApplication(Object.assign(good(), { date: '2026-11-18' }), { today: TODAY, counts: { '2026-11-18': 22 } }); // 마포구 = 짝수일
+  assert.match(v.errors.date, /다 찼어요/);
+});
+
+test('수거양: 무상수거 / 15kg 이상 / 기타(직접 입력 필수)', () => {
+  assert.deepStrictEqual(R.AMOUNTS, ['15kg 미만 (무상수거)', '15kg 이상', '기타 (직접 입력)']);
+  const o = { today: TODAY };
+  const bad = R.validateApplication(Object.assign(good(), { amount: R.AMOUNT_OTHER, amountDetail: '' }), o);
+  assert.ok(bad.errors.amountDetail);
+  const ok = R.validateApplication(Object.assign(good(), { amount: R.AMOUNT_OTHER, amountDetail: '큰 이불가방 2개' }), o);
+  assert.strictEqual(ok.ok, true); assert.strictEqual(ok.clean.amount, '기타: 큰 이불가방 2개');
 });
 
 test('날짜: 대표가 연 주말(openDates)은 열림', () => {
@@ -63,9 +89,10 @@ test('마감: 직원이 지정한 날짜·기간·구역이 닫히고 안내 문
   assert.strictEqual(R.checkDate('2026-11-25', 'south', o).open, true); // 남쪽은 그 기간에도 열림
 });
 
-test('달력: 21일치, 열린 날은 모두 같은 홀짝', () => {
+test('달력: 오늘부터 60일 뒤까지(61일치), 열린 날은 모두 같은 홀짝', () => {
   const cal = R.calendar('south', { today: TODAY });
-  assert.strictEqual(cal.length, 21);
+  assert.strictEqual(cal.length, 61);
+  assert.strictEqual(cal[0].date, TODAY);
   cal.filter(d => d.open).forEach(d => assert.strictEqual(+d.date.slice(8) % 2, 1));
   assert.ok(cal.some(d => d.open));
 });

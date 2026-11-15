@@ -54,7 +54,9 @@
     <section class="ap-card">
       <h2><span class="n">3</span>수거할 옷은 얼마나 되나요? <em>필수</em></h2>
       <div class="ap-chips" data-group="amount"></div>
-      <p class="ap-err" data-err="amount"></p>
+      <p class="ap-small">15kg 미만은 매입 없이 무상수거로 진행돼요.</p>
+      <label class="ap-field" id="amountDetailWrap" hidden><span>수거 양·물품</span><input id="amountDetail" maxlength="100" placeholder="예: 큰 이불가방 2개, 신발 10켤레"></label>
+      <p class="ap-err" data-err="amount"></p><p class="ap-err" data-err="amountDetail"></p>
 
       <h3>물건은 어디에 두실 건가요?</h3>
       <div class="ap-chips" data-group="place"></div>
