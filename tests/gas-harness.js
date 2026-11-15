@@ -47,6 +47,9 @@ function makeGrid(name, rows) {
         setNumberFormat(f) { fit(r); (rows[r - 1].fmt = rows[r - 1].fmt || {})[c] = f; return rng; },
         getNumberFormats() { return Array.from({ length: nr || 1 }, (_, i) => [((rows[r - 1 + i] || {}).fmt || {})[c] || '']); },
         getValue() { return (rows[r - 1] || [])[c - 1]; },
+        setBackground(v) { fit(r); rows[r - 1].bg = v; return rng; },
+        setFontColor(v) { fit(r); rows[r - 1].fg = v; return rng; },
+        setFontLine(v) { fit(r); rows[r - 1].line = v; return rng; },
         copyTo() {}
       };
       return rng;
@@ -133,7 +136,8 @@ function createEnv(opts = {}) {
         const k = new Date(d.getTime() + (tz === 'GMT' ? 0 : 9) * 3600e3);
         const p = n => String(n).padStart(2, '0');
         const ymd = `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())}`;
-        return f === 'yyyy-MM-dd' ? ymd : `${ymd} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}:${p(k.getUTCSeconds())}`;
+        const t = { yyyy: k.getUTCFullYear(), MM: p(k.getUTCMonth() + 1), dd: p(k.getUTCDate()), HH: p(k.getUTCHours()), mm: p(k.getUTCMinutes()), ss: p(k.getUTCSeconds()) };
+        return String(f || 'yyyy-MM-dd HH:mm:ss').replace(/yyyy|MM|dd|HH|mm|ss/g, x => t[x]);
       }
     },
     Date: opts.now ? class extends Date { constructor(...a) { if (a.length) super(...a); else super(opts.now); } static now() { return new Date(opts.now).getTime(); } } : Date

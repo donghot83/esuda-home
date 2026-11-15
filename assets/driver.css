@@ -42,3 +42,10 @@ button{font:inherit;cursor:pointer}
 .dv-item.done .dv-btns .ok{background:#fff;color:var(--green-d)}
 .dv-btns .no{color:var(--err)}
 .dv-link{display:block;margin:24px auto 0;background:none;border:0;color:var(--sub);text-decoration:underline;font-size:13px}
+.dv-cancel{background:#fde7e9;color:#c62828;border:2px solid #f5b5bb;border-radius:12px;padding:10px 14px;margin-bottom:8px;font-size:15px;line-height:1.5}
+.dv-cancel small{color:#a33;font-size:12px}
+.dv-cx{font-style:normal;color:#c62828;margin-left:6px}
+.dv-item.cancel{background:#fde7e9;border-color:#f5b5bb}
+.dv-item.cancel .dv-name,.dv-item.cancel .dv-addr{text-decoration:line-through;color:#a33}
+.dv-item.cancel .dv-no{background:#c62828}
+.dv-badge{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:#c62828;border-radius:6px;padding:2px 8px;white-space:nowrap}

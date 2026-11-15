@@ -36,8 +36,10 @@ test('그날 장부 줄(카톡 포함) + 신청페이지 예약은 연락처·�
   env.ctx.cancelReservation(c.reservationId);
   const r = post(env, { action: 'driverList', key: 'goodkey123', date: '2026-11-18' }); // 소문자도 됨
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.items.length, 1);
-  const it = r.items[0];
+  assert.strictEqual(r.items.length, 2);
+  const cx = r.items.find(x => x.name === '취소손님');
+  assert.strictEqual(cx.cancelled, true); assert.strictEqual(cx.phone, undefined); assert.strictEqual(cx.entrance, undefined);
+  const it = r.items.find(x => x.name === '신청고객');
   assert.strictEqual(it.rid, a.reservationId);
   assert.strictEqual(it.phone, '01000001111');
   assert.match(it.entrance, /#7788#/);
@@ -45,7 +47,7 @@ test('그날 장부 줄(카톡 포함) + 신청페이지 예약은 연락처·�
   assert.strictEqual(it.map, '서울 마포구 가상북로 233');
   assert.ok(!JSON.stringify(r).includes('1112223334'), '계좌번호 없음');
   const k = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
-  assert.deepStrictEqual(k.items.map(x => x.name), ['가상카톡']);
+  assert.deepStrictEqual(k.items.map(x => x.name + (x.cancelled ? '(취소)' : '')), ['가상카톡', '가상취소(취소)']);
   assert.strictEqual(k.items[0].map, '경기 고양시 덕양구 가상로 5');
   assert.strictEqual(k.items[0].src, '카톡·직원');
 });

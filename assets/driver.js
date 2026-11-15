@@ -52,10 +52,18 @@
   }
 
   function render() {
-    var done = st.items.filter(function (x) { return x.state === '완료'; }).length;
-    var fail = st.items.filter(function (x) { return x.state === '못함'; }).length;
-    $('sum').innerHTML = '<span>전체 ' + st.items.length + '건</span><span class="done">완료 ' + done + (fail ? ' · 못함 ' + fail : '') + '</span>';
+    var live = st.items.filter(function (x) { return !x.cancelled; });
+    var cancels = st.items.filter(function (x) { return x.cancelled; });
+    var done = live.filter(function (x) { return x.state === '완료'; }).length;
+    var fail = live.filter(function (x) { return x.state === '못함'; }).length;
+    $('sum').innerHTML = '<span>수거 ' + live.length + '건' + (cancels.length ? ' <em class="dv-cx">취소 ' + cancels.length + '</em>' : '') + '</span><span class="done">완료 ' + done + (fail ? ' · 못함 ' + fail : '') + '</span>';
+    $('cancelBox').hidden = !cancels.length;
+    $('cancelBox').innerHTML = '❌ 취소: ' + cancels.map(function (c) { return '<b>' + (c.no ? esc(c.no) + '번 ' : '') + esc(c.name) + '</b>(' + esc(c.area) + ')'; }).join(', ') + '<br><small>봉투 번호는 그대로예요. 이 번호는 건너뛰세요.</small>';
     $('list').innerHTML = sorted().map(function (it) {
+      if (it.cancelled) {
+        return '<li class="dv-item cancel"><div class="dv-top"><span class="dv-no">' + esc(it.no || (it._i + 1)) + '</span><span class="dv-name">' + esc(it.name) + '</span><span class="dv-area">' + esc(it.area) + '</span><span class="dv-badge">취소됨' + (it.cancelAt ? ' ' + esc(it.cancelAt) : '') + '</span></div>' +
+          '<div class="dv-addr">' + esc(it.addr) + '</div></li>';
+      }
       var cls = it.state === '완료' ? ' done' : (it.state === '못함' ? ' fail' : '');
       var rows = '';
       if (it.amount) rows += '<div class="dv-row"><span>수거양</span>' + esc(it.amount) + '</div>';

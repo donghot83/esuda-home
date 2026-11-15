@@ -117,7 +117,7 @@ test('장부 시간대가 GMT여도(구글로 가져온 파일) 날짜가 하루
   assert.strictEqual(sh.rows[i][1], '2026-11-18'); // 날짜는 글자로 넣어 시트가 그날로 해석
 });
 
-test('장부 왼쪽 번호: 그날 줄을 1, 2, 3 … 으로 매기고, 취소하면 다시 매김 (지난 날짜는 안 건드림)', () => {
+test('장부 왼쪽 번호: 그날 줄을 1, 2, 3 … 으로 매기고, 취소해도 번호 유지 (지난 날짜는 안 건드림)', () => {
   const L = ledger();
   const env = createEnv({ now: NOW, ledger: L });
   const a = env.post(sub({ date: '2026-11-16', name: '셋째' }));
@@ -126,6 +126,6 @@ test('장부 왼쪽 번호: 그날 줄을 1, 2, 3 … 으로 매기고, 취소�
   const nums = () => sh.rows.filter(r => r && r[2] && ymd(r[1]) === '2026-11-16').map(r => r[0] + ':' + r[2]);
   assert.deepStrictEqual(nums(), ['1:가상C', '2:가상D', '3:셋째', '4:넷째']);
   env.ctx.cancelReservation(a.reservationId);
-  assert.deepStrictEqual(nums(), ['1:가상C', '2:가상D', '3:넷째']);
+  assert.deepStrictEqual(nums(), ['1:가상C', '2:가상D', '3:셋째', '4:넷째']); // 취소해도 번호(봉투 번호) 그대로
   assert.strictEqual(sh.rows[1][0], 1); assert.strictEqual(sh.rows[2][0], 2); // 11/13 기존 번호 그대로
 });

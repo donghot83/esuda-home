@@ -15,7 +15,8 @@ const env = createEnv({ staffToken: 'local-test-token', props: { DRIVER_KEY: 'LO
   [(+today.slice(5, 7)) + '월 매입금액']: [
     [null, '날짜', '이름', '지역구', '주소', '무게', '로스', '최종', '금액', '로스금액', null],
     [null, D(today), '가상카톡', '은평구', '가상로 12 301호', null, null, null, null, null, '카톡 예약 / 비번 #1234'],
-    [null, D(today), '가상직원', '마포구', '가상북로 5 2층', null, null, null, null, null, '']
+    [null, D(today), '가상직원', '마포구', '가상북로 5 2층', null, null, null, null, null, ''],
+    [null, D(today), '가상취소', '서대문구', '가상로 9', null, null, null, null, null, '[취소 11/15 17:20] 카톡 예약']
   ] } });
 env.get({ action: 'schedule' }); // 시트 만들기
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };

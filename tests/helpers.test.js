@@ -77,30 +77,41 @@ test('하루 22건은 장부 줄(카톡·직원 입력)까지 세서 마감', ()
   assert.strictEqual(env.post(sub({ date: '2026-11-20' })).ok, true); // 다른 날은 그대로
 });
 
-test('예약 취소: 예약 시트=취소, 장부 줄 삭제, 그날 하나뿐이면 빈 줄 2칸도 정리 → 장부가 원래대로', () => {
+test('예약 취소: 장부 줄은 남기고 빨간 취소선·[취소 시각], 번호 그대로, 예약 시트=취소, 그날 자리 다시 열림, 취소기록', () => {
   const env = createEnv({ now: NOW, ledger: ledger() });
-  const before = JSON.stringify(names(env.ledger['11월 매입금액']));
-  const r = env.post(sub({ date: '2026-11-20' }));
+  env.post(sub({ date: '2026-11-16', name: '첫손님' }));
+  const r = env.post(sub({ date: '2026-11-16', name: '취소할분' }));
+  env.post(sub({ date: '2026-11-16', name: '끝손님' }));
+  const sh = env.ledger['11월 매입금액'];
+  const row = () => sh.rows.find(x => x && x[2] === '취소할분');
+  const before = row()[0];
+  env.ctx.refreshLedgerCounts_();
+  const c0 = env.get({ action: 'schedule' }).counts['2026-11-16'];
   const c = env.ctx.cancelReservation(r.reservationId);
   assert.strictEqual(c.ok, true, c.msg);
-  assert.strictEqual(book(env).get(1, '확정상태'), '취소');
-  assert.strictEqual(JSON.stringify(names(env.ledger['11월 매입금액'])), before);
-  // 같은 날 다른 예약이 있으면 그 줄만
-  const a = env.post(sub({ date: '2026-11-16', name: '취소할분' }));
-  env.ctx.cancelReservation(a.reservationId);
-  assert.strictEqual(JSON.stringify(names(env.ledger['11월 매입금액'])), before);
-  // 다시 취소해도 문제없음
-  assert.match(env.ctx.cancelReservation(a.reservationId).msg, /이미 취소/);
+  assert.strictEqual(row()[0], before);                       // 번호 그대로
+  assert.match(row()[10], /^\[취소 11\/15 10:00\] ESD-/);
+  assert.strictEqual(row().line, 'line-through'); assert.strictEqual(row().bg, '#fde7e9');
+  assert.strictEqual(book(env).rows.find(x => x[0] === r.reservationId)[1], '취소');
+  env.ctx.refreshLedgerCounts_();
+  assert.strictEqual(env.get({ action: 'schedule' }).counts['2026-11-16'], c0 - 1); // 자리 1개 열림
+  const log = env.sheet('취소기록').rows[1];
+  assert.deepStrictEqual([log[1], log[2], log[3]], ['2026-11-16', before, '취소할분']);
+  assert.match(env.ctx.cancelReservation(r.reservationId).msg, /이미 취소/);
+  // 새 신청이 와도 번호는 밀리지 않음
+  env.post(sub({ date: '2026-11-16', name: '늦은손님' }));
+  assert.strictEqual(row()[0], before);
 });
 
-test('예약 취소: 무게가 이미 적힌 줄은 지우지 않고 메모에 [취소]', () => {
+test('카톡 예약(예약번호 없음)도 "11/16 2" 처럼 날짜+번호로 취소', () => {
   const env = createEnv({ now: NOW, ledger: ledger() });
-  const r = env.post(sub({ date: '2026-11-16' }));
-  const row = env.ledger['11월 매입금액'].rows.find(x => x && x[2] === '신청고객');
-  row[5] = 18;
-  const c = env.ctx.cancelReservation(r.reservationId);
-  assert.match(c.msg, /\[취소\]/);
-  assert.match(row[10], /^\[취소\] /);
+  env.ctx.renumberUpcoming();
+  const c = env.ctx.cancelReservation('11/16 2');
+  assert.strictEqual(c.ok, true, c.msg);
+  assert.match(c.msg, /2번 가상D/);
+  assert.match(env.ledger['11월 매입금액'].rows.find(x => x && x[2] === '가상D')[10], /^\[취소 /);
+  assert.strictEqual(env.ctx.cancelReservation('11/16 9').ok, false);
+  assert.strictEqual(env.ctx.cancelReservation('아무거나').ok, false);
 });
 
 test('매일 점검 메일: 정상 항목과 확인 필요(12월 시트 없음·2027년 장부 미연결)를 알려 주고, 연락처·계좌는 안 넣음', () => {

@@ -200,6 +200,7 @@ function refreshLedgerCounts_() {
       var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
       if (!d || d.slice(0, 7) !== ym || d < today) continue;
       if (!String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;
+      if (/^\[취소/.test(String(v[i][LEDGER_COL.memo - 1] || ''))) continue; // 취소 표시 줄은 자리 차지 안 함
       out[d] = (out[d] || 0) + 1;
     }
   });

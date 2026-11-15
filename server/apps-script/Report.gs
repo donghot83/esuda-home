@@ -32,7 +32,7 @@ function runChecks_() {
     if (String(r[cAt] || '').slice(0, 10) === today) { todayNew++; if (String(r[cPh] || '')) photos++; }
     if (!d || d < today) continue;
     if (st === '취소') {
-      try { if (ledgerHasRid_(d, rid)) bad.cancelLeft.push(rid); } catch (e) {}
+      try { var cf = ledgerFindEntry_({ rid: rid, date: d }); if (cf && !cf.cancelled) bad.cancelLeft.push(rid); } catch (e) {}
       continue;
     }
     if (st !== '확정') continue;
@@ -62,7 +62,7 @@ function runChecks_() {
   if (waitReal.length) issues.push('장부에 아직 안 들어간 예약 ' + waitReal.length + '건: ' + waitReal.map(function (p) { return p.rid + ' (' + p.why + ')'; }).join(', '));
   else ok.push('신청페이지 예약이 모두 장부에 들어감');
   if (bad.lost.length) issues.push('장부에서 줄이 사라진 예약 ' + bad.lost.length + '건 (직원이 지웠다면 메뉴 "예약 취소"로 처리해 주세요): ' + bad.lost.join(', '));
-  if (bad.cancelLeft.length) issues.push('취소했는데 장부에 줄이 남은 예약: ' + bad.cancelLeft.join(', '));
+  if (bad.cancelLeft.length) issues.push('취소했는데 장부에 취소 표시가 없는 예약 (메뉴 "예약 취소"로 다시 처리해 주세요): ' + bad.cancelLeft.join(', '));
   var over = Object.keys(counts).filter(function (d) { return d >= today && counts[d] > R.CONFIG.dailyCap; }).sort();
   if (over.length) issues.push('하루 ' + R.CONFIG.dailyCap + '건 넘은 날: ' + over.map(function (d) { return dayLabel_(d) + ' ' + counts[d] + '건'; }).join(', ') + ' (직원이 따로 추가한 거면 괜찮음)');
   else ok.push('하루 ' + R.CONFIG.dailyCap + '건 넘은 날 없음 (카톡·직원 입력 포함)');
@@ -131,6 +131,12 @@ function refreshDashboard() {
     sh.getRange(5 + i, 1, 1, H.length).setBackground(bg);
   }
   var y = 5 + rows.length + 1;
+  var cl = [];
+  for (var cd = 0; cd < 21; cd++) { var dd = R.addDays(today, cd); cancelsFor_(dd).forEach(function (c) { cl.push(['❌ ' + dayLabel_(dd) + ' ' + c.no + '번 ' + c.name + ' (' + c.area + ') — ' + c.at + ' 취소']); }); }
+  sh.getRange(y, 1).setValue('취소된 예약 (장부엔 빨간 취소선, 번호 그대로)').setFontWeight('bold').setFontColor('#c62828');
+  if (cl.length) sh.getRange(y + 1, 1, cl.length, 1).setValues(cl).setFontColor('#c62828');
+  else sh.getRange(y + 1, 1).setValue('없음');
+  y += Math.max(cl.length, 1) + 2;
   sh.getRange(y, 1).setValue('점검 내용').setFontWeight('bold');
   var lines = chk.issues.map(function (s) { return ['⚠️ ' + s]; }).concat(chk.ok.map(function (s) { return ['✅ ' + s]; }));
   if (lines.length) sh.getRange(y + 1, 1, lines.length, 1).setValues(lines);
@@ -139,7 +145,7 @@ function refreshDashboard() {
   sh.getRange(y + 1, 1, 4, 1).setValues([
     ['· 어떤 날을 닫으려면: "마감" 탭에 시작일·종료일·구역을 적으면 신청 화면에서 바로 닫혀요.'],
     ['· 주말에 받으려면: "주말예외" 탭에 날짜를 적어요.'],
-    ['· 고객이 취소하면: 위 메뉴 이수다 → 예약 취소 → 예약번호 입력 (장부 줄까지 같이 정리).'],
+    ['· 고객이 취소하면: 메뉴 이수다 → 예약 취소 → 예약번호 또는 "11/16 3"(날짜 번호). 장부 줄은 빨간 취소선, 번호는 그대로, 기사님 화면에도 바로 표시.'],
     ['· "전체 예약"은 장부 줄 수(카톡·직원 입력 포함)라서 22건이 차면 신청 화면에서 그날이 자동으로 닫혀요.']
   ]);
   sh.setFrozenRows(4);
@@ -167,6 +173,12 @@ function dailyReport() {
     '',
     (function () { var y = R.addDays(chk.today, -1), s = driverSummary_(y); return '■ 어제 ' + dayLabel_(y) + ' 기사님 체크: 완료 ' + s.done + '건' + (s.fail ? ', 못함 ' + s.fail + '건' : '') + ' / 장부 ' + (chk.counts[y] || 0) + '건'; })(),
     (function () { var a = alimStatus_(); return '■ 알림톡: ' + (a.on ? '켜짐' : '꺼짐') + (a.missing.length ? ' (준비 남음: ' + a.missing.join(', ') + ')' : ''); })(),
+    (function () {
+      var sh = ss_().getSheetByName(SHEET_CANCEL_LOG); if (!sh) return '■ 오늘 처리한 취소: 없음';
+      var t = sh.getDataRange().getValues().slice(1).filter(function (r) { return String(r[0]).slice(0, 10) === chk.today; })
+        .map(function (r) { return dayLabel_(fmtDate_(r[1])) + ' ' + r[2] + '번 ' + r[3]; });
+      return '■ 오늘 처리한 취소: ' + (t.length ? t.length + '건 — ' + t.join(', ') : '없음');
+    })(),
     '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)',
     '■ 내일 ' + dayLabel_(t.date) + ' 수거: 전체 ' + t.total + '건 (신청페이지 ' + t.page + '건' + (areas ? ': ' + areas : '') + ')',
     '■ 앞으로 7일 (장부 포함): ' + next7.join(' / '),
@@ -177,55 +189,105 @@ function dailyReport() {
   return { issues: chk.issues.length };
 }
 
-/** 예약 취소 — 예약 시트 '확정상태'=취소, 장부 줄 삭제(무게가 적혀 있으면 지우지 않고 메모에 [취소]) */
-function cancelReservation(rid) {
-  rid = String(rid || '').trim().toUpperCase();
-  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid)) return { ok: false, msg: '예약번호 모양이 아니에요 (예: ESD-261116-AB12)' };
+/**
+ * 예약 취소 (2026-11-15 대표 요청: 취소가 서로 잘 보이게)
+ *  - 장부 줄은 지우지 않는다 → 번호(=봉투 번호)가 그대로 유지됨
+ *  - 장부 줄: 빨간 취소선 + 연한 빨간 바탕 + 메모 앞에 [취소 MM/DD HH:mm]
+ *  - 예약 시트(신청페이지 예약): 확정상태 = 취소, 취소일시 기록 → 그날 자리 1개 다시 열림
+ *  - '취소기록' 탭에 한 줄 (언제, 어느 날 몇 번 누구) → 현황판·점검 메일·기사님 화면에 표시
+ * 입력: 예약번호(ESD-261116-AB12) 또는 "날짜 번호" (예: 11/16 3, 2026-11-16 3) — 카톡 예약도 번호로 취소
+ */
+var SHEET_CANCEL_LOG = '취소기록';
+var CANCEL_BG = '#fde7e9', CANCEL_FG = '#c62828';
+
+function parseCancelInput_(input) {
+  var s = String(input || '').trim().toUpperCase();
+  var m = /^ESD-\d{6}-[A-Z0-9]{4}$/.exec(s);
+  if (m) return { rid: s, date: '20' + s.slice(4, 6) + '-' + s.slice(6, 8) + '-' + s.slice(8, 10) };
+  var R = rules_(), today = R.todayKST(new Date());
+  m = /^(?:(\d{4})[-./])?(\d{1,2})[-./](\d{1,2})\D*\s+(\d{1,3})\s*번?$/.exec(s);
+  if (!m) return null;
+  var y = m[1] || today.slice(0, 4), mo = ('0' + m[2]).slice(-2), d = ('0' + m[3]).slice(-2);
+  var date = y + '-' + mo + '-' + d;
+  if (!m[1] && date < R.addDays(today, -31)) date = (+y + 1) + '-' + mo + '-' + d; // 연말에 1월 날짜를 넣은 경우
+  return R.parseYmd(date) ? { date: date, no: +m[4] } : null;
+}
+
+/** 장부에서 날짜+번호 또는 예약번호로 줄 찾기 */
+function ledgerFindEntry_(q) {
+  var lss = ledgerOpen_(q.date);
+  if (!lss) return null;
+  var sh = ledgerMonthSheet_(lss, q.date);
+  if (!sh) return null;
+  var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues();
+  for (var i = 1; i < v.length; i++) {
+    var memo = String(v[i][LEDGER_COL.memo - 1] || '');
+    if (q.rid ? memo.indexOf(q.rid) >= 0 : (cellYmd_(v[i][LEDGER_COL.date - 1], tz) === q.date && String(v[i][LEDGER_COL.no - 1]) === String(q.no) && String(v[i][LEDGER_COL.name - 1] || '').trim())) {
+      var rid = q.rid || ((/ESD-\d{6}-[A-Z0-9]{4}/.exec(memo) || [])[0] || '');
+      return { sheet: sh, row: i + 1, no: v[i][LEDGER_COL.no - 1], name: String(v[i][LEDGER_COL.name - 1] || ''), area: String(v[i][LEDGER_COL.area - 1] || ''),
+        memo: memo, weight: v[i][LEDGER_COL.weight - 1], rid: rid, cancelled: /^\[취소/.test(memo) };
+    }
+  }
+  return null;
+}
+
+function cancelReservation(input) {
+  var q = parseCancelInput_(input);
+  if (!q) return { ok: false, msg: '예약번호(예: ESD-261116-AB12) 또는 "날짜 번호"(예: 11/16 3)로 넣어 주세요.' };
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) return { ok: false, msg: '잠시 뒤 다시 해 주세요 (다른 작업 중)' };
   try {
-    var b = bookData_(), hdr = ensureBookHeaders_(b.sh, ['취소일시']);
-    var data = b.sh.getDataRange().getValues(), cId = hdr.indexOf('예약번호'), row = -1;
-    for (var i = 1; i < data.length; i++) if (String(data[i][cId]) === rid) { row = i; break; }
-    var date = row >= 0 ? fmtDate_(data[row][hdr.indexOf('수거일')]) : '20' + rid.slice(4, 6) + '-' + rid.slice(6, 8) + '-' + rid.slice(8, 10);
-    var msgs = [];
-    if (row >= 0) {
-      if (String(data[row][hdr.indexOf('확정상태')]) === '취소') msgs.push('예약 시트: 이미 취소돼 있었어요');
+    var now = new Date(), stamp = Utilities.formatDate(now, 'Asia/Seoul', 'MM/dd HH:mm');
+    var msgs = [], f = ledgerFindEntry_(q), rid = q.rid || (f && f.rid) || '';
+    if (f) {
+      if (f.cancelled) msgs.push('장부: 이미 취소 표시돼 있어요 (' + f.no + '번 ' + f.name + ')');
       else {
-        b.sh.getRange(row + 1, hdr.indexOf('확정상태') + 1).setValue('취소');
-        b.sh.getRange(row + 1, hdr.indexOf('취소일시') + 1).setValue(Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm'));
-        msgs.push('예약 시트: 취소로 바꿨어요 (그날 자리 1개 다시 열림)');
+        f.sheet.getRange(f.row, LEDGER_COL.memo).setValue('[취소 ' + stamp + '] ' + f.memo);
+        f.sheet.getRange(f.row, 1, 1, LEDGER_COL.memo).setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setFontLine('line-through');
+        bumpLedgerCount_(q.date, -1);
+        msgs.push('장부: ' + f.no + '번 ' + f.name + ' 줄에 빨간 취소선 표시 (번호는 그대로)' + (String(f.weight == null ? '' : f.weight).trim() ? ' — 무게가 이미 적혀 있으니 확인해 주세요' : ''));
       }
-    } else msgs.push('예약 시트: 이 예약번호가 없어요 (카톡 예약이면 장부만 정리)');
-    var f = ledgerFind_(date, rid);
-    if (!f) msgs.push('장부: 이 예약번호 줄이 없어요');
-    else if (String(f.weight == null ? '' : f.weight).trim()) {
-      var mc = f.sheet.getRange(f.row, LEDGER_COL.memo);
-      var mv = String(mc.getValue() || ''); if (mv.indexOf('[취소]') < 0) mc.setValue('[취소] ' + mv);
-      msgs.push('장부: 무게가 이미 적혀 있어서 줄은 남기고 메모에 [취소]만 붙였어요 (' + f.row + '행)');
-    } else {
-      var v = f.values, k = f.row - 1;
-      var blank = function (r) { if (r < 1 || r >= v.length) return r >= v.length; for (var c = 0; c < 5; c++) if (String(v[r][c] == null ? '' : v[r][c]).trim()) return false; return true; };
-      f.sheet.deleteRow(f.row);
-      var extra = 0;
-      if (blank(k + 1) && blank(k - 1)) { // 그 날짜에 이 예약 하나뿐이었으면 위쪽 빈 줄(2칸)도 정리
-        for (var g = 1; g <= LEDGER_GAP && k - g >= 1 && blank(k - g); g++) { f.sheet.deleteRow(f.row - g); extra++; }
+    } else msgs.push(q.rid ? '장부: 이 예약번호 줄이 없어요' : '장부: ' + q.date.slice(5).replace('-', '/') + ' ' + q.no + '번 줄이 없어요');
+    var b = bookData_();
+    if (rid) {
+      var hdr = ensureBookHeaders_(b.sh, ['취소일시']), data = b.sh.getDataRange().getValues(), cId = hdr.indexOf('예약번호');
+      for (var i = 1; i < data.length; i++) if (String(data[i][cId]) === rid) {
+        if (String(data[i][hdr.indexOf('확정상태')]) === '취소') msgs.push('예약 시트: 이미 취소돼 있었어요');
+        else {
+          b.sh.getRange(i + 1, hdr.indexOf('확정상태') + 1).setValue('취소');
+          b.sh.getRange(i + 1, hdr.indexOf('취소일시') + 1).setValue(Utilities.formatDate(now, 'Asia/Seoul', 'yyyy-MM-dd HH:mm'));
+          msgs.push('예약 시트: 취소로 바꿨어요 (그날 자리 1개 다시 열림)');
+        }
+        break;
       }
-      bumpLedgerCount_(date, -1);
-      try { var lssC = ledgerOpen_(date); renumberLedgerDate_(f.sheet, date, lssC.getSpreadsheetTimeZone() || 'GMT'); } catch (e) {}
-      msgs.push('장부: ' + f.row + '행을 지웠어요' + (extra ? ' (그날 다른 예약이 없어 빈 줄 ' + extra + '칸도 정리)' : ''));
     }
-    return { ok: true, msg: rid + ' 취소 처리\n' + msgs.join('\n') };
+    if (!f && !rid) return { ok: false, msg: msgs.join('\n') };
+    if (f && !f.cancelled) {
+      sheet_(SHEET_CANCEL_LOG, ['취소시각', '수거일', '번호', '이름', '지역구', '예약번호'])
+        .appendRow([Utilities.formatDate(now, 'Asia/Seoul', 'yyyy-MM-dd HH:mm'), q.date, f.no, f.name, f.area, rid]);
+    }
+    return { ok: true, msg: (f ? q.date.slice(5).replace('-', '/') + ' ' + f.no + '번 ' + f.name : rid) + ' 취소 처리\n' + msgs.join('\n') };
   } finally { lock.releaseLock(); }
+}
+
+/** 그날 취소 목록 [{no, name, area, at}] — 기사님 화면·현황판·메일용 */
+function cancelsFor_(date) {
+  var sh = ss_().getSheetByName(SHEET_CANCEL_LOG);
+  if (!sh) return [];
+  return sh.getDataRange().getValues().slice(1).filter(function (r) { return fmtDate_(r[1]) === date; })
+    .map(function (r) { return { no: r[2], name: String(r[3]), area: String(r[4]), at: String(r[0]).slice(5) }; });
 }
 
 function menuCancel_() {
   var ui = SpreadsheetApp.getUi();
-  var p = ui.prompt('예약 취소', '취소할 예약번호를 넣어 주세요 (예: ESD-261116-AB12)', ui.ButtonSet.OK_CANCEL);
+  var p = ui.prompt('예약 취소', '예약번호(예: ESD-261116-AB12) 또는 날짜와 번호(예: 11/16 3)를 넣어 주세요.\n카톡으로 받은 예약은 날짜와 번호로 넣으면 돼요.', ui.ButtonSet.OK_CANCEL);
   if (p.getSelectedButton() !== ui.Button.OK) return;
-  var rid = p.getResponseText().trim();
-  if (ui.alert('예약 취소', rid + ' 를 취소할까요?\n예약 시트는 "취소"로 바뀌고, 장부 줄은 지워져요(무게가 적힌 줄은 남겨 둠).', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  var r = cancelReservation(rid);
+  var input = p.getResponseText().trim(), q = parseCancelInput_(input);
+  if (!q) { ui.alert('예약번호 또는 "11/16 3" 처럼 넣어 주세요.'); return; }
+  var f = ledgerFindEntry_(q);
+  var who = f ? (q.date.slice(5).replace('-', '/') + ' ' + f.no + '번 ' + f.name + ' (' + f.area + ')') : input;
+  if (ui.alert('예약 취소', who + ' 을(를) 취소할까요?\n장부 줄은 남기고 빨간 취소선으로 표시해요 (번호 그대로).', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var r = cancelReservation(input);
   ui.alert(r.msg);
   try { refreshDashboard(); } catch (e) {}
 }
