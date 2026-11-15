@@ -187,7 +187,9 @@ function submit_(p) {
     sh.appendRow(hdr.map(function (h) { var x = row[h]; return (h === '연락처' || h === '계좌번호' || h === '우편번호') ? "'" + x : (x === undefined ? '' : x); }));
     SpreadsheetApp.flush();
     // 장부 자동 입력 — 실패해도 예약은 확정 유지('대기'로 남고 syncLedgerPending 이 다시 시도)
-    try {
+    // 2026-11-16: 고객 화면이 빨리 끝나도록 스크립트 속성 DEFER_LEDGER=1 이면 장부는 5분마다 도는 자동 반영이 넣음
+    var defer = PropertiesService.getScriptProperties().getProperty('DEFER_LEDGER') === '1';
+    if (!defer) try {
       var lg = ledgerAppend_(c, rid);
       if (lg.ok) {
         var newRow = data.length + 1;

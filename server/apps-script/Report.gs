@@ -46,7 +46,7 @@ function runChecks_() {
     if (String(r[cSync]) !== '완료') {
       var why = !ledgerIdFor_(d) ? d.slice(0, 4) + '년 장부가 아직 연결 안 됨'
         : '장부에 ' + (+d.slice(5, 7)) + '월 시트가 없거나 잠시 못 열었음 (10분마다 다시 시도)';
-      try { var l = ledgerOpen_(d); if (l && ledgerMonthSheet_(l, d)) why = '다음 10분 자동 반영 때 들어갈 예정'; } catch (e) {}
+      try { var l = ledgerOpen_(d); if (l && ledgerMonthSheet_(l, d)) why = '다음 10분 자동 반영 때 들어갈 예정'; } catch (e) {} // (5분 주기여도 같은 문구로 판별)
       pending.push({ rid: rid, date: d, why: why });
     } else {
       try { if (ledgerOpen_(d) && !ledgerHasRid_(d, rid)) bad.lost.push(rid + ' (' + dayLabel_(d) + ')'); } catch (e) {}
@@ -353,3 +353,11 @@ function setupHelpers() {
 }
 
 function menuRenumber_() { var n = renumberUpcoming(); SpreadsheetApp.getUi().alert(n + '개 날짜의 번호를 1, 2, 3 … 으로 다시 매겼어요.'); }
+
+/** 2026-11-16 신청 응답 빠르게: 장부 입력은 5분마다 자동 반영이 처리 (한 번 실행) */
+function setupFastSubmit() {
+  PropertiesService.getScriptProperties().setProperty('DEFER_LEDGER', '1');
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'syncLedgerPending') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('syncLedgerPending').timeBased().everyMinutes(5).create();
+  Logger.log('신청 응답 빠르게 설정 완료 — 장부는 5분마다 자동 반영');
+}

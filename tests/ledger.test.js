@@ -129,3 +129,14 @@ test('장부 왼쪽 번호: 그날 줄을 1, 2, 3 … 으로 매기고, 취소�
   assert.deepStrictEqual(nums(), ['1:가상C', '2:가상D', '3:셋째', '4:넷째']); // 취소해도 번호(봉투 번호) 그대로
   assert.strictEqual(sh.rows[1][0], 1); assert.strictEqual(sh.rows[2][0], 2); // 11/13 기존 번호 그대로
 });
+
+test('빠른 신청(DEFER_LEDGER=1): 응답 때는 예약 시트만, 장부는 자동 반영(syncLedgerPending)이 넣음, 하루 건수는 바로 반영', () => {
+  const env = createEnv({ now: NOW, ledger: ledger(), props: { DEFER_LEDGER: '1' } });
+  const r = env.post(sub());
+  assert.strictEqual(r.ok, true);
+  assert.ok(!names(env.ledger['11월 매입금액']).includes('신청고객'));
+  const b = env.sheet('예약').rows; assert.strictEqual(b[1][b[0].indexOf('장부반영')], '대기');
+  assert.strictEqual(env.get({ action: 'schedule' }).counts['2026-11-16'] >= 1, true);
+  assert.strictEqual(env.ctx.syncLedgerPending().added, 1);
+  assert.ok(names(env.ledger['11월 매입금액']).includes('신청고객'));
+});

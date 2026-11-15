@@ -162,6 +162,7 @@ function dailyRoute() {
   var R = rules_(), now = new Date(), today = R.todayKST(now), sc = loadSchedule_();
   var wd = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10))).getUTCDay();
   if (R.CONFIG.closedWeekdays.indexOf(wd) >= 0 && sc.openDates.indexOf(today) < 0) return;
+  try { syncLedgerPending(); } catch (e) { logError_('동선 전 장부 반영', e); } // 막 들어온 신청까지 장부에 넣고 짜기
   var r = routeDate(today);
   try { refreshDashboard(); } catch (e) {}
   var to = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAILS');

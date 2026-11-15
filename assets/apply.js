@@ -84,6 +84,7 @@
     return list.reduce(function (chain, d, i) {
       return chain.then(function () {
         $('btnSubmit').textContent = '사진 올리는 중… (' + (i + 1) + '/' + list.length + ')';
+        showWait(true, '예약 확정! 사진을 올리는 중이에요 (' + (i + 1) + '/' + list.length + ')');
         return api('POST', { action: 'photo', reservationId: r.reservationId, submissionId: p.submissionId, index: i + 1, data: d.split(',')[1] })
           .then(function (x) { if (x && x.ok) done++; }).catch(function () {});
       });
@@ -200,6 +201,17 @@
     };
   }
 
+  // 신청 중 안내 (2026-11-16 대표 요청: 모바일에서 확정까지 몇 초 걸려 '잠시만 기다려 주세요' 표시)
+  var waitBox = null;
+  function showWait(on, msg) {
+    if (!waitBox) {
+      waitBox = document.createElement('div'); waitBox.className = 'ap-wait'; waitBox.setAttribute('role', 'status'); waitBox.setAttribute('aria-live', 'polite');
+      waitBox.innerHTML = '<div class="ap-wait-box"><div class="ap-spin"></div><b id="waitMsg"></b><small>몇 초 걸릴 수 있어요. 창을 닫거나 버튼을 다시 누르지 마세요.</small></div>';
+      document.body.appendChild(waitBox);
+    }
+    waitBox.hidden = !on; if (msg) $('waitMsg').textContent = msg;
+  }
+
   $('applyForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (state.sending) return;
@@ -208,6 +220,7 @@
     var v = R.validateApplication(p, { today: state.schedule.today, now: new Date(), closures: state.schedule.closures, openDates: state.schedule.openDates, counts: state.schedule.counts });
     if (!v.ok) { showErrors(v.errors); return; }
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
+    showWait(true, '예약을 확정하고 있어요. 잠시만 기다려 주세요…');
     api('POST', p).then(function (r) {
       if (r && r.ok) {
         if (state.photoMode === R.PHOTO_MODES[0] && photos.length) return uploadPhotos(r, p).then(function (u) { showDone(r, u); });
@@ -222,6 +235,7 @@
       $('formError').textContent = '연결이 불안정해 저장을 확인하지 못했어요. 다시 눌러 주세요(중복 예약되지 않아요).';
     }).then(function () {
       state.sending = false; $('btnSubmit').disabled = false; $('btnSubmit').textContent = '수거 신청하기';
+      showWait(false);
     });
   });
 
