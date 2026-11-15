@@ -65,3 +65,9 @@ body{font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFo
 .ap-layer-head button{border:0;background:none;font-size:22px;cursor:pointer;padding:6px}
 .ap-layer-body{flex:1;min-height:0}
 [hidden]{display:none!important}
+
+.ap-photo-btn{display:flex;align-items:center;justify-content:center;margin-top:10px}
+.ap-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.ap-photos div{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#eef2ef}
+.ap-photos img{width:100%;height:100%;object-fit:cover;display:block}
+.ap-photos button{position:absolute;top:4px;right:4px;width:26px;height:26px;border:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer}

@@ -57,8 +57,11 @@ function createEnv(opts = {}) {
   const sheets = {};
   const props = { STAFF_TOKEN: opts.staffToken || 'test-token' };
   if (opts.ledger) props.LEDGER_ID = 'LEDGER';
+  if (opts.notify) props.NOTIFY_EMAILS = opts.notify;
   const ledgerSheets = {};
   const created = [];
+  const drive = { folders: {}, files: [] };
+  const mails = [];
   Object.entries(opts.ledger || {}).forEach(([n, rows]) => { ledgerSheets[n] = makeGrid(n, rows); });
   if (opts.ledgerFail) props.LEDGER_ID = 'LEDGER';
   let locked = false;
@@ -78,12 +81,22 @@ function createEnv(opts = {}) {
       flush() {}
     },
     LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
+    DriveApp: {
+      getFolderById: id => { const f = drive.folders[id]; if (!f) throw new Error('no folder'); return f; },
+      getFoldersByName: n => { const l = Object.values(drive.folders).filter(f => f.name === n); return { hasNext: () => l.length > 0, next: () => l.shift() }; },
+      createFolder: n => { const id = 'F' + Object.keys(drive.folders).length; const f = { name: n, getId: () => id,
+        createFile: b => { const file = { name: b.name, bytes: b.bytes, getUrl: () => 'https://drive.google.com/fake/' + b.name, getName: () => b.name }; drive.files.push(file); return file; } };
+        drive.folders[id] = f; return f; }
+    },
+    MailApp: { sendEmail: m => { mails.push(m); } },
     ContentService: {
       MimeType: { JSON: 'json' },
       createTextOutput: s => ({ text: s, setMimeType() { return this; } })
     },
     Utilities: {
+      base64Decode: d => Array.from(Buffer.from(d, 'base64')),
+      newBlob: (bytes, type, name) => ({ bytes, type, name }),
       // 시간대: 'Asia/Seoul'=+9, 'GMT'=0 만 흉내 (테스트용)
       parseDate(s, tz, f) {
         const off = tz === 'GMT' ? 0 : 9;
@@ -105,9 +118,10 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Ledger.gs'), 'utf8'), ctx, { filename: 'Ledger.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Transfer.gs'), 'utf8'), ctx, { filename: 'Transfer.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Notify.gs'), 'utf8'), ctx, { filename: 'Notify.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
-    ctx, sheets, ledger: ledgerSheets, created,
+    ctx, sheets, ledger: ledgerSheets, created, drive, mails,
     get: params => call('doGet', { parameter: params }),
     post: body => call('doPost', { postData: { contents: JSON.stringify(body) } }),
     sheet: n => sheets[n],

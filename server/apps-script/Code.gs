@@ -102,6 +102,7 @@ function doPost(e) {
   catch (err) { return json_({ ok: false, error: 'bad_json' }); }
   try {
     if (body.action === 'submit') return json_(submit_(body));
+    if (body.action === 'photo') return json_(photo_(body));
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만
     if (body.action === 'markSynced') return json_(markSynced_(body.token, body.ids));
     return json_({ ok: false, error: 'unknown_action' });
@@ -117,6 +118,7 @@ function submit_(p) {
   if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
   try {
     var sh = sheet_(SHEET_BOOK, BOOK_HEADERS);
+    ensureBookHeaders_(sh, BOOK_EXTRA_HEADERS);
     var data = sh.getDataRange().getValues();
     var hdr = data[0];
     var cSub = hdr.indexOf('제출ID'), cId = hdr.indexOf('예약번호'), cDate = hdr.indexOf('수거일');
@@ -142,7 +144,8 @@ function submit_(p) {
       '이름': c.name, '연락처': c.phone, '시도': c.sido, '시군구': c.sigungu, '법정동': c.bname, '우편번호': c.zonecode,
       '도로명주소': c.roadAddress, '지번주소': c.jibunAddress, '상세주소': c.addressDetail, '수거양': c.amount,
       '놓을곳': c.place, '놓을곳상세': c.placeDetail, '공동현관': c.entrance, '공동현관비번': c.entranceCode,
-      '요청사항': c.memo, '은행': c.bank, '계좌번호': c.account, '예금주': c.holder, '제출ID': c.submissionId, '출처': '신청페이지'
+      '요청사항': c.memo, '은행': c.bank, '계좌번호': c.account, '예금주': c.holder, '제출ID': c.submissionId, '출처': '신청페이지',
+      '사진방식': c.photoMode, '사진': ''
     };
     // 숫자로 바뀌지 않게(앞자리 0 보존) 문자열로 저장
     sh.appendRow(hdr.map(function (h) { var x = row[h]; return (h === '연락처' || h === '계좌번호' || h === '우편번호') ? "'" + x : (x === undefined ? '' : x); }));
@@ -156,6 +159,7 @@ function submit_(p) {
         sh.getRange(newRow, hdr.indexOf('장부반영시각') + 1).setValue(now);
       }
     } catch (err) { /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
+    try { notifyBooking_(c, rid, (countsByDate_(data)[c.date] || 0) + 1); } catch (err) { /* 알림 실패는 예약에 영향 없음 */ }
     return { ok: true, duplicate: false, reservationId: rid, date: c.date };
   } finally {
     lock.releaseLock();

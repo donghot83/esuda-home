@@ -45,6 +45,51 @@
     });
   }
   chips('amount', R.AMOUNTS, function (t) { $('amountDetailWrap').hidden = t !== R.AMOUNT_OTHER; });
+  // ---------------- 사진 (선택): 휴대폰에서 줄여서(긴 변 1280px, JPEG) 예약 확정 후 한 장씩 전송
+  var photos = []; // dataURL
+  chips('photoMode', R.PHOTO_MODES, function (t) {
+    $('photoWrap').hidden = t !== R.PHOTO_MODES[0];
+    $('photoLaterHint').hidden = t !== R.PHOTO_MODES[1];
+  });
+  function shrink(file) {
+    return new Promise(function (ok, bad) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var k = Math.min(1, 1280 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); bad(new Error('img')); };
+      img.src = url;
+    });
+  }
+  function renderPhotos() {
+    var box = $('photoList'); box.innerHTML = '';
+    photos.forEach(function (d, i) {
+      var w = document.createElement('div'); w.innerHTML = '<img alt=""><button type="button" aria-label="사진 빼기">✕</button>';
+      w.querySelector('img').src = d;
+      w.querySelector('button').addEventListener('click', function () { photos.splice(i, 1); renderPhotos(); });
+      box.appendChild(w);
+    });
+  }
+  $('photoInput').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || []).slice(0, R.PHOTO_MAX - photos.length);
+    this.value = '';
+    files.reduce(function (p, f) { return p.then(function () { return shrink(f).then(function (d) { photos.push(d); }); }); }, Promise.resolve())
+      .then(renderPhotos).catch(function () { renderPhotos(); setErr('amount', '사진을 읽지 못했어요. 다른 사진을 골라 주세요.'); });
+  });
+  function uploadPhotos(r, p) {
+    var list = photos.slice(), done = 0;
+    return list.reduce(function (chain, d, i) {
+      return chain.then(function () {
+        $('btnSubmit').textContent = '사진 올리는 중… (' + (i + 1) + '/' + list.length + ')';
+        return api('POST', { action: 'photo', reservationId: r.reservationId, submissionId: p.submissionId, index: i + 1, data: d.split(',')[1] })
+          .then(function (x) { if (x && x.ok) done++; }).catch(function () {});
+      });
+    }, Promise.resolve()).then(function () { return { sent: done, total: list.length }; });
+  }
+
   chips('place', R.PLACES, function (t) { $('placeDetailWrap').hidden = t !== '직접 입력'; });
   chips('entrance', R.ENTRANCE, function (t) { $('entranceCodeWrap').hidden = t !== '공동현관 비밀번호'; });
   R.BANKS.forEach(function (b) { var o = document.createElement('option'); o.value = b; o.textContent = b; $('bank').appendChild(o); });
@@ -148,7 +193,7 @@
     return {
       action: 'submit', submissionId: submissionId(),
       name: $('name').value, phone: $('phone').value, address: state.address || {}, addressDetail: $('addrDetail').value,
-      date: state.date, amount: state.amount, amountDetail: $('amountDetail').value, place: state.place, placeDetail: $('placeDetail').value,
+      date: state.date, amount: state.amount, amountDetail: $('amountDetail').value, photoMode: state.photoMode || '', place: state.place, placeDetail: $('placeDetail').value,
       entrance: state.entrance, entranceCode: $('entranceCode').value, memo: $('memo').value,
       bank: $('bank').value, account: $('account').value, holder: $('holder').value,
       agreeNotice: $('agreeNotice').checked, agreePrivacy: $('agreePrivacy').checked
@@ -164,7 +209,10 @@
     if (!v.ok) { showErrors(v.errors); return; }
     state.sending = true; $('btnSubmit').disabled = true; $('btnSubmit').textContent = '신청 저장 중…';
     api('POST', p).then(function (r) {
-      if (r && r.ok) { showDone(r); return; }
+      if (r && r.ok) {
+        if (state.photoMode === R.PHOTO_MODES[0] && photos.length) return uploadPhotos(r, p).then(function (u) { showDone(r, u); });
+        showDone(r); return;
+      }
       if (r && r.error === 'invalid' && r.errors) {
         if (r.errors.date) { state.date = ''; loadSchedule(); } // 그사이 마감된 날짜 → 달력 새로 고침
         showErrors(r.errors); return;
@@ -177,11 +225,20 @@
     });
   });
 
-  function showDone(r) {
+  function showDone(r, up) {
     var dt = R.parseYmd(r.date);
     $('doneId').textContent = r.reservationId;
     $('doneDate').textContent = (dt.getUTCMonth() + 1) + '월 ' + dt.getUTCDate() + '일 (' + WD[dt.getUTCDay()] + ')';
     $('doneAddr').textContent = (state.address ? state.address.roadAddress : '') + ' ' + $('addrDetail').value;
+    var later = state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length);
+    var dp = $('donePhoto');
+    if (up && up.sent === up.total) { dp.hidden = false; dp.textContent = '사진 ' + up.sent + '장이 함께 접수됐어요.'; }
+    if (later) {
+      dp.hidden = false;
+      dp.textContent = (up && up.sent < up.total ? '사진 일부를 올리지 못했어요. ' : '') + '카카오채널로 예약번호(' + r.reservationId + ')와 함께 옷 사진을 보내 주세요.';
+      $('doneKakao').textContent = '카카오채널로 사진 보내기'; $('doneKakao').className = 'ap-submit'; $('doneKakao').style.display = 'flex';
+      $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';
+    }
     $('formView').hidden = true; $('doneView').hidden = false;
     try { sessionStorage.removeItem('esuda_sub_id'); } catch (e) {}
     window.scrollTo(0, 0);

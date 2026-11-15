@@ -14,7 +14,7 @@
 
   // ---------------------------------------------------------------- 설정 (운영 담당자 확인 후 조정)
   var CONFIG = {
-    version: '2026-11-15a',
+    version: '2026-11-15b',
     minLeadDays: 0,          // 2026-11-15 대표 결정: 당일 예약 받음
     sameDayCutoffHour: 17,   // 당일 예약은 오후 5시(한국 시간) 전까지 — 보통 5시쯤 전체 예약 마감
     dailyCap: 22,            // 하루 최대 예약 수(20~22개). 차면 자동 마감. 급한 고객·양 많은 고객은 직원이 따로 추가
@@ -162,6 +162,9 @@
   var AMOUNT_OTHER = '기타 (직접 입력)';
   var PLACES = ['문 앞에 놓아둘게요', '직접 입력'];
   var ENTRANCE = ['공동현관 비밀번호', '자유 출입 가능', '경비실 호출'];
+  // 2026-11-15: 수거 품목 사진 (선택) — 지금 올리기 / 나중에 카톡 / 사진 없음
+  var PHOTO_MODES = ['지금 올릴게요', '나중에 카톡으로 보낼게요', '사진 없이 신청할게요'];
+  var PHOTO_MAX = 3;
 
   function digits(s) { return String(s || '').replace(/[^0-9]/g, ''); }
 
@@ -194,6 +197,7 @@
     if (PLACES.indexOf(p.place) < 0) e.place = '물건 놓을 곳을 골라 주세요.';
     if (p.place === '직접 입력' && !String(p.placeDetail || '').trim()) e.placeDetail = '물건 놓을 곳을 적어 주세요.';
     if (ENTRANCE.indexOf(p.entrance) < 0) e.entrance = '공동현관 출입 방법을 골라 주세요.';
+    var photoMode = PHOTO_MODES.indexOf(p.photoMode) >= 0 ? p.photoMode : '사진 없이 신청할게요';
     if (BANKS.indexOf(p.bank) < 0) e.bank = '은행을 골라 주세요.';
     var acct = digits(p.account);
     if (acct.length < 9 || acct.length > 16) e.account = '계좌번호를 숫자만 9~16자리로 입력해 주세요.';
@@ -211,7 +215,7 @@
         zonecode: String(addr.zonecode || ''), roadAddress: String(addr.roadAddress || ''), jibunAddress: String(addr.jibunAddress || ''),
         addressDetail: detail, amount: p.amount === AMOUNT_OTHER ? ('기타: ' + amountDetail) : p.amount, place: p.place, placeDetail: String(p.placeDetail || '').trim().slice(0, 100),
         entrance: p.entrance, entranceCode: String(p.entranceCode || '').trim().slice(0, 40),
-        memo: String(p.memo || '').trim().slice(0, 300), bank: p.bank, account: acct, holder: holder
+        memo: String(p.memo || '').trim().slice(0, 300), bank: p.bank, account: acct, holder: holder, photoMode: photoMode
       } : null
     };
   }
@@ -223,7 +227,7 @@
 
   return {
     CONFIG: CONFIG, PARITY: PARITY, ZONES: ZONES, EXCEPTIONS: EXCEPTIONS,
-    BANKS: BANKS, AMOUNTS: AMOUNTS, AMOUNT_OTHER: AMOUNT_OTHER, PLACES: PLACES, ENTRANCE: ENTRANCE,
+    BANKS: BANKS, AMOUNTS: AMOUNTS, AMOUNT_OTHER: AMOUNT_OTHER, PLACES: PLACES, ENTRANCE: ENTRANCE, PHOTO_MODES: PHOTO_MODES, PHOTO_MAX: PHOTO_MAX,
     classifyAddress: classifyAddress, checkDate: checkDate, calendar: calendar, closureFor: closureFor,
     validateApplication: validateApplication, reservationId: reservationId,
     todayKST: todayKST, hourKST: hourKST, addDays: addDays, parseYmd: parseYmd, digits: digits

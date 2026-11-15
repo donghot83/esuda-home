@@ -58,6 +58,16 @@
       <label class="ap-field" id="amountDetailWrap" hidden><span>수거 양·물품</span><input id="amountDetail" maxlength="100" placeholder="예: 큰 이불가방 2개, 신발 10켤레"></label>
       <p class="ap-err" data-err="amount"></p><p class="ap-err" data-err="amountDetail"></p>
 
+      <h3>수거할 옷 사진 <em class="opt">선택</em></h3>
+      <div class="ap-chips" data-group="photoMode"></div>
+      <div id="photoWrap" hidden>
+        <label class="ap-addr-btn ap-photo-btn" for="photoInput">📷 사진 찍기 / 앨범에서 고르기 (최대 3장)</label>
+        <input type="file" id="photoInput" accept="image/*" multiple hidden>
+        <div class="ap-photos" id="photoList"></div>
+        <p class="ap-small">옷만 보이게 찍어 주세요. 사진은 예약이 확정된 뒤 올라가요.</p>
+      </div>
+      <p class="ap-small" id="photoLaterHint" hidden>신청이 끝나면 예약번호와 함께 카카오채널로 사진을 보내 주세요.</p>
+
       <h3>물건은 어디에 두실 건가요?</h3>
       <div class="ap-chips" data-group="place"></div>
       <label class="ap-field" id="placeDetailWrap" hidden><span>놓을 곳</span><input id="placeDetail" maxlength="100" placeholder="예: 1층 경비실 옆"></label>
@@ -109,8 +119,8 @@
       <p class="ap-err" data-err="agreeNotice"></p>
       <details class="ap-priv">
         <summary>개인정보 수집·이용 안내 보기</summary>
-        <p>수집 항목: 이름, 휴대폰 번호, 주소, 은행·계좌번호·예금주, 공동현관 정보, 요청사항<br>
-        목적: 방문수거 일정 안내와 매입금액 입금<br>
+        <p>수집 항목: 이름, 휴대폰 번호, 주소, 은행·계좌번호·예금주, 공동현관 정보, 요청사항, 수거 품목 사진(선택)<br>
+        목적: 방문수거 일정 안내와 매입금액 입금, 수거 품목 확인과 거래 증빙<br>
         보관: 수거·입금 완료 후 6개월 이내 파기<br>
         수집·이용 주체: 이수다무역<br>
         동의하지 않으실 수 있지만, 동의하지 않으면 신청이 어려워요. 카카오채널로도 신청할 수 있어요.</p>
@@ -139,7 +149,8 @@
       <li>수거 당일 기사님이 카카오톡이나 문자로 안내드려요.</li>
       <li>변경·취소는 카카오채널로 예약번호와 함께 알려 주세요.</li>
     </ul>
-    <a class="ap-alt" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener">카카오채널로 문의하기</a>
+    <div class="ap-notice" id="donePhoto" hidden></div>
+    <a class="ap-alt" id="doneKakao" href="https://pf.kakao.com/_DxoHVG/chat" target="_blank" rel="noopener">카카오채널로 문의하기</a>
   </section>
 </main>
 
