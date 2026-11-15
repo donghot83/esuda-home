@@ -23,7 +23,7 @@ function makeSheet(name) {
       setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => { while (rows.length < r + i) rows.push([]); rows[r - 1 + i][c - 1 + j] = v; })); },
       getValue() { return (rows[r - 1] || [])[c - 1]; }
     }); },
-    clear() { rows.length = 0; }, setFrozenRows() {}, setColumnWidth() {}, setColumnWidths() {}, getName() { return name; },
+    clear() { rows.length = 0; }, deleteRow(r) { rows.splice(r - 1, 1); }, setFrozenRows() {}, setColumnWidth() {}, setColumnWidths() {}, getName() { return name; },
     failNextAppend: false
   };
   const orig = sh.appendRow;
@@ -110,9 +110,10 @@ function createEnv(opts = {}) {
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     DriveApp: {
       getFolderById: id => { const f = drive.folders[id]; if (!f) throw new Error('no folder'); return f; },
+      getFileById: id => { const f = drive.files.find(x => x.getId() === id); if (!f) throw new Error('no file'); return f; },
       getFoldersByName: n => { const l = Object.values(drive.folders).filter(f => f.name === n); return { hasNext: () => l.length > 0, next: () => l.shift() }; },
       createFolder: n => { const id = 'F' + Object.keys(drive.folders).length; const f = { name: n, getId: () => id,
-        createFile: b => { const file = { name: b.name, bytes: b.bytes, getUrl: () => 'https://drive.google.com/fake/' + b.name, getName: () => b.name }; drive.files.push(file); return file; } };
+        createFile: b => { const id = 'FILE' + drive.files.length; const file = { name: b.name, bytes: b.bytes, trashed: false, getId: () => id, getUrl: () => 'https://drive.google.com/fake/' + id, getName: () => file.name, setName(n) { file.name = n; return file; }, setTrashed(t) { file.trashed = t; return file; } }; drive.files.push(file); return file; } };
         drive.folders[id] = f; return f; }
     },
     MailApp: { sendEmail: m => { mails.push(m); } },

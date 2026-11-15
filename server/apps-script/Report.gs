@@ -156,6 +156,7 @@ function refreshDashboard() {
 
 /** 매일 점검 메일 (트리거: 매일 18시) */
 function dailyReport() {
+  try { tidyPrePhotos_(); } catch (e) { logError_('사진 정리', e); }
   var chk = refreshDashboard();
   var to = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAILS');
   if (!to) return;

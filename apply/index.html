@@ -8,7 +8,7 @@
 <meta name="description" content="이수다 헌옷 방문수거 신청">
 <link rel="icon" href="../assets/favicon-32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="../assets/apply.css?v=5">
+<link rel="stylesheet" href="../assets/apply.css?v=6">
 </head>
 <body>
 <header class="ap-head">
@@ -61,11 +61,11 @@
       <h3>수거할 옷 사진 <em class="opt">선택</em></h3>
       <div class="ap-chips" data-group="photoMode"></div>
       <div id="photoWrap" hidden>
-        <label class="ap-addr-btn ap-photo-btn" for="photoInput">📷 사진 찍기 / 앨범에서 고르기 (최대 3장)</label>
+        <label class="ap-addr-btn ap-photo-btn" id="photoAddBtn" for="photoInput">📷 사진 찍기 / 앨범에서 고르기 (최대 2장)</label>
         <input type="file" id="photoInput" accept="image/*" multiple hidden>
         <div class="ap-photos" id="photoList"></div>
         <p class="ap-err" data-err="photo"></p>
-        <p class="ap-small">옷만 보이게 찍어 주세요. 사진은 예약이 확정된 뒤 올라가요.</p>
+        <p class="ap-small">옷 전체가 보이게 1장이면 충분해요. 고르면 바로 올라가요.</p>
       </div>
       <p class="ap-small" id="photoLaterHint" hidden>신청이 끝나면 예약번호와 함께 카카오채널로 사진을 보내 주세요.</p>
 
@@ -165,8 +165,8 @@
 </div>
 
 <script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-<script src="../assets/apply-rules.js?v=5"></script>
-<script src="../assets/apply-config.js?v=5"></script>
-<script src="../assets/apply.js?v=9"></script>
+<script src="../assets/apply-rules.js?v=6"></script>
+<script src="../assets/apply-config.js?v=6"></script>
+<script src="../assets/apply.js?v=10"></script>
 </body>
 </html>

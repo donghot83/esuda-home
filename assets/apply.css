@@ -81,3 +81,7 @@ body{font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFo
 @keyframes apspin{to{transform:rotate(360deg)}}
 
 .ap-nopay{background:var(--soft);border-radius:12px;padding:12px 14px;margin:6px 0 4px}
+.ap-photos div{position:relative}
+.ap-ph-st{position:absolute;left:4px;bottom:4px;font-size:11px;font-weight:700;color:#fff;background:rgba(15,23,42,.7);border-radius:6px;padding:1px 6px}
+.ap-ph-st.ok{background:rgba(47,154,20,.9)}
+.ap-ph-st.fail{background:rgba(217,45,32,.9)}

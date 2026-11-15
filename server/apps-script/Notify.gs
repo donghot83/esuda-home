@@ -65,7 +65,7 @@ function notifyBooking_(c, rid, countThatDay) {
     '동네: ' + c.sigungu + ' ' + c.bname,
     '수거양: ' + c.amount,
     '놓을 곳: ' + c.place + (c.placeDetail ? ' (' + c.placeDetail + ')' : ''),
-    '사진: ' + (c.photoMode || '-'),
+    '사진: ' + (c.photoMode || '-') + (c.photoIds && c.photoIds.length ? ' (' + c.photoIds.length + '장 접수)' : ''),
     '요청사항: ' + (c.memo || '-'),
     '',
     '연락처·계좌·현관 비밀번호는 예약 시트에서 확인하세요.'
@@ -78,4 +78,51 @@ function R_dateLabel_(ymd) {
   var W = ['일', '월', '화', '수', '목', '금', '토'];
   var d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10)));
   return (+ymd.slice(5, 7)) + '/' + (+ymd.slice(8, 10)) + '(' + W[d.getUTCDay()] + ')';
+}
+
+/* ===== 사진 미리 올리기 (2026-11-16) — 고객이 사진을 고르는 즉시 저장, 신청할 때 예약에 연결 ===== */
+var SHEET_PREPHOTO = '사진대기';
+function photoPre_(b) {
+  var sid = String(b.submissionId || ''), data = String(b.data || '').replace(/^data:image\/\w+;base64,/, '');
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(sid)) return { ok: false, error: 'bad_request' };
+  if (!data || data.length > PHOTO_MAX_B64) return { ok: false, error: 'too_large' };
+  var sh = sheet_(SHEET_PREPHOTO, ['시각', '제출ID', '파일ID', '주소', '연결']);
+  var n = sh.getDataRange().getValues().filter(function (r) { return String(r[1]) === sid; }).length;
+  if (n >= 6) return { ok: false, error: 'too_many' };
+  var file = photoFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', 'pre_' + sid.slice(0, 12) + '_' + (n + 1) + '.jpg'));
+  sh.appendRow([Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'), sid, file.getId(), file.getUrl(), '']);
+  return { ok: true, id: file.getId() };
+}
+/** 신청 때: 같은 제출ID로 미리 올린 사진만 예약에 연결 → '사진' 칸 글자 */
+function photoAttach_(sid, ids, rid) {
+  if (!ids || !ids.length) return { text: '', count: 0 };
+  var sh = ss_().getSheetByName(SHEET_PREPHOTO);
+  if (!sh) return { text: '', count: 0 };
+  var v = sh.getDataRange().getValues(), lines = [], k = 0;
+  for (var i = 1; i < v.length; i++) {
+    if (String(v[i][1]) !== String(sid) || ids.indexOf(String(v[i][2])) < 0) continue;
+    k++; lines.push(rid + '_' + k + '.jpg ' + v[i][3]);
+    sh.getRange(i + 1, 5).setValue(rid);
+  }
+  return { text: lines.join('\n'), count: k };
+}
+/** 매일: 하루 지난 연결 안 된 사진은 휴지통(신청 안 하고 나간 경우) + 연결된 사진 이름을 예약번호로 */
+function tidyPrePhotos_() {
+  var sh = ss_().getSheetByName(SHEET_PREPHOTO);
+  if (!sh) return 0;
+  var v = sh.getDataRange().getValues(), cut = Utilities.formatDate(new Date(Date.now() - 864e5), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'), n = 0, seq = {};
+  var del = [];
+  for (var i = 1; i < v.length; i++) { // 올린 순서대로 번호
+    var linked = String(v[i][4] || '');
+    try {
+      if (!linked && String(v[i][0]) < cut) { DriveApp.getFileById(String(v[i][2])).setTrashed(true); del.push(i + 1); n++; }
+      else if (linked && !/^이름변경/.test(linked)) {
+        seq[linked] = (seq[linked] || 0) + 1;
+        DriveApp.getFileById(String(v[i][2])).setName(linked + '_' + seq[linked] + '.jpg');
+        sh.getRange(i + 1, 5).setValue('이름변경 ' + linked);
+      }
+    } catch (e) {}
+  }
+  for (var j = del.length - 1; j >= 0; j--) sh.deleteRow(del[j]);
+  return n;
 }

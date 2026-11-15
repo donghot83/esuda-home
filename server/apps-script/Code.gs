@@ -136,6 +136,7 @@ function doPost(e) {
   try {
     if (body.action === 'submit') return json_(submit_(body));
     if (body.action === 'photo') return json_(photo_(body));
+    if (body.action === 'photoPre') return json_(photoPre_(body));   // 사진 미리 올리기
     if (body.action === 'track') return json_(track_(body));   // 방문 단계 기록 (개인정보 없음)
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
@@ -150,7 +151,7 @@ function doPost(e) {
 
 /** 신청 저장 + 확정. 저장에 성공했을 때만 ok:true 를 돌려준다. */
 function submit_(p) {
-  var R = rules_();
+  var R = rules_(), T0 = Date.now(), srv = {};
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
   try {
@@ -184,9 +185,12 @@ function submit_(p) {
       '요청사항': c.memo, '은행': c.bank, '계좌번호': c.account, '예금주': c.holder, '제출ID': c.submissionId, '출처': '신청페이지',
       '사진방식': c.photoMode, '사진': '', '무상희망': c.noPay ? '예' : ''
     };
+    var att = { text: '', count: 0 };
+    try { att = photoAttach_(c.submissionId, c.photoIds, rid); row['사진'] = att.text; } catch (err) { logError_('사진 연결', err); }
     // 숫자로 바뀌지 않게(앞자리 0 보존) 문자열로 저장
     sh.appendRow(hdr.map(function (h) { var x = row[h]; return (h === '연락처' || h === '계좌번호' || h === '우편번호') ? "'" + x : (x === undefined ? '' : x); }));
     SpreadsheetApp.flush();
+    srv.save = Date.now() - T0;
     // 장부 자동 입력 — 실패해도 예약은 확정 유지('대기'로 남고 syncLedgerPending 이 다시 시도)
     // 2026-11-16: 고객 화면이 빨리 끝나도록 스크립트 속성 DEFER_LEDGER=1 이면 장부는 5분마다 도는 자동 반영이 넣음
     var defer = PropertiesService.getScriptProperties().getProperty('DEFER_LEDGER') === '1';
@@ -198,9 +202,11 @@ function submit_(p) {
         sh.getRange(newRow, hdr.indexOf('장부반영시각') + 1).setValue(now);
       }
     } catch (err) { logError_('장부 입력', err); /* 장부 쪽 오류는 고객 응답에 영향 없음 */ }
-    try { notifyBooking_(c, rid, countsByDate_(sh.getDataRange().getValues())[c.date] || 1); } catch (err) { logError_('알림 메일', err); }
+    try { notifyBooking_(c, rid, (countsByDate_(data)[c.date] || 0) + 1); } catch (err) { logError_('알림 메일', err); }
+    srv.mail = Date.now() - T0;
     try { alimBooked_(c, rid); } catch (err) { logError_('알림톡(예약 완료)', err); }
-    return { ok: true, duplicate: false, reservationId: rid, date: c.date };
+    srv.total = Date.now() - T0;
+    return { ok: true, duplicate: false, reservationId: rid, date: c.date, photos: att.count, srv: srv };
   } finally {
     lock.releaseLock();
   }

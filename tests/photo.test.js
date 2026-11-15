@@ -59,3 +59,31 @@ test('알림 메일 주소가 없으면 보내지 않음(예약은 정상)', () 
   assert.strictEqual(env.post(sub()).ok, true);
   assert.strictEqual(env.mails.length, 0);
 });
+
+test('사진 미리 올리기: 고르는 즉시 저장 → 신청 때 같은 제출ID 사진만 예약에 연결, 하루 지난 미연결 사진은 정리', () => {
+  const { createEnv } = require('./gas-harness.js');
+  const R = require('../assets/apply-rules.js');
+  const env = createEnv({ now: '2026-11-15T01:00:00Z', ledger: { '11월 매입금액': [[null, '날짜', '이름']] } });
+  const sid = 'sub-preupload-1';
+  const img = Buffer.from('fakejpeg').toString('base64');
+  const a = env.post({ action: 'photoPre', submissionId: sid, data: img });
+  const b = env.post({ action: 'photoPre', submissionId: sid, data: img });
+  const other = env.post({ action: 'photoPre', submissionId: 'sub-someone-else', data: img });
+  assert.strictEqual(a.ok, true); assert.ok(a.id);
+  assert.strictEqual(env.post({ action: 'photoPre', submissionId: 'x', data: img }).error, 'bad_request');
+  const r = env.post({ action: 'submit', submissionId: sid, name: '사진손님', phone: '010-0000-0000',
+    address: { sido: '서울', sigungu: '마포구', bname: '성산동', roadAddress: '서울 마포구 가상로 1' }, addressDetail: '1호', date: '2026-11-16',
+    amount: R.AMOUNTS[1], place: R.PLACES[0], entrance: R.ENTRANCE[1], photoMode: R.PHOTO_MODES[0], photoIds: [a.id, b.id, other.id],
+    bank: '', account: '', holder: '', noPay: true, agreeNotice: true, agreePrivacy: true });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.photos, 2);                        // 다른 사람 사진은 안 붙음
+  assert.ok(r.srv && r.srv.total >= 0 && r.srv.mail >= 0);
+  const bk = env.sheet('예약').rows, h = bk[0], cell = bk[1][h.indexOf('사진')];
+  assert.match(cell, new RegExp('^' + r.reservationId + '_1\.jpg .*\n' + r.reservationId + '_2\.jpg '));
+  // 정리: 미연결(다른 사람) 사진은 하루 지나면 휴지통, 연결된 사진은 예약번호 이름으로
+  const pre = env.sheet('사진대기').rows; pre.slice(1).forEach(row => { row[0] = '2026-11-13 10:00:00'; });
+  env.ctx.tidyPrePhotos_();
+  assert.strictEqual(env.drive.files.find(f => f.getId() === other.id).trashed, true);
+  assert.strictEqual(env.drive.files.find(f => f.getId() === a.id).getName(), r.reservationId + '_1.jpg');
+  assert.strictEqual(env.drive.files.find(f => f.getId() === a.id).trashed, false);
+});
