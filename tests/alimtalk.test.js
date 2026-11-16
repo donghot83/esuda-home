@@ -70,6 +70,8 @@ test('입금 예정·무상수거 알림톡: 이체 파일 만들 때 보냄, �
   const L = e.ledger['11월 매입금액'].rows;
   L.find(x => x && x[2] === '입금손님')[5] = 40;
   L.find(x => x && x[2] === '무상손님')[5] = 10;
+  // 실제 시트처럼 수거일 칸이 날짜 값인 경우 (글자로 바꾸면 'NaN/18(undefined)' 나던 문제)
+  const BK = e.sheet('예약').rows, hd = BK[0]; BK.forEach((x, i) => { if (i) x[hd.indexOf('수거일')] = new Date('2026-11-16T00:00:00+09:00'); });
   const res = e.ctx.makeTransferFile();
   assert.strictEqual(res.count, 1); assert.strictEqual(res.free, 1);
   const free = e.fetches.find(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE');
@@ -80,6 +82,7 @@ test('입금 예정·무상수거 알림톡: 이체 파일 만들 때 보냄, �
   assert.strictEqual(e.fetches.length, before); // 송금 표시 때는 추가 발송 없음
   const paid = e.fetches.find(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPPAID');
   const v = paid.body.messages[0].kakaoOptions.variables;
+  assert.strictEqual(v['#{수거일}'], '11/16(월)');
   assert.strictEqual(v['#{금액}'], '10,000'); assert.strictEqual(v['#{계좌끝4자리}'], '7776'); assert.strictEqual(v['#{이름}'], '입금손님');
   assert.ok(!JSON.stringify(paid.body).includes('9998887776'));
 });

@@ -76,6 +76,8 @@ function notifyBooking_(c, rid, countThatDay) {
 
 function R_dateLabel_(ymd) {
   var W = ['일', '월', '화', '수', '목', '금', '토'];
+  ymd = fmtDate_(ymd);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd; // 이상한 값이면 그대로 (NaN 표시 방지)
   var d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10)));
   return (+ymd.slice(5, 7)) + '/' + (+ymd.slice(8, 10)) + '(' + W[d.getUTCDay()] + ')';
 }

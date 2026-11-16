@@ -86,7 +86,8 @@ function bookRowByRid_(rid) {
   var b = bookData_();
   for (var i = 1; i < b.data.length; i++) if (String(b.data[i][b.col('예약번호')]) === rid) {
     var row = b.data[i];
-    return { get: function (h) { var k = b.col(h); return k >= 0 ? String(row[k] == null ? '' : row[k]) : ''; } };
+    return { get: function (h) { var k = b.col(h); return k >= 0 ? String(row[k] == null ? '' : row[k]) : ''; },
+      date: function (h) { var k = b.col(h); return k >= 0 ? fmtDate_(row[k]) : ''; } }; // 날짜 칸은 원래 값으로 (글자로 바꾸면 NaN)
   }
   return null;
 }
@@ -104,7 +105,7 @@ function alimSettled_(rid, lr, amount) {
   if (!r) return { ok: false, skipped: 'no_booking' };
   var w = (+lr.weight || 0) - (+lr.loss || 0);
   if (amount > 0) {
-    return sendAlimtalk_('paid', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(fmtDate_(r.get('수거일'))),
+    return sendAlimtalk_('paid', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
       '#{무게}': String(w), '#{단가}': String(transferUnitPrice_()), '#{금액}': Number(amount).toLocaleString('ko-KR'),
       '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) });
   }

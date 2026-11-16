@@ -44,7 +44,10 @@ function fmtDate_(v) {
   if (v instanceof Date) {
     return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
   }
-  return String(v || '').trim();
+  var s = String(v || '').trim();
+  // 2026-11-16: 시트 날짜가 글자로 바뀐 경우("Wed Nov 18 2026 00:00:00 GMT+0900 …")도 YYYY-MM-DD 로
+  if (s && !/^\d{4}-\d{2}-\d{2}$/.test(s)) { var d = new Date(s); if (!isNaN(d.getTime())) return Utilities.formatDate(d, 'Asia/Seoul', 'yyyy-MM-dd'); }
+  return s;
 }
 
 /** 마감·주말예외 읽기 (공개 가능한 정보만) */
