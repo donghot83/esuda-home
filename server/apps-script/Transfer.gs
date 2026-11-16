@@ -112,7 +112,7 @@ function makeTransferFile(opts) {
         '무게': lr.weight, '로스': lr.loss || '', '금액근거': pa.source, '장부행': lr.row };
       rows.push(TRANSFER_COLUMNS.map(function (h) { return rec[h]; }));
       check.push(rec); total += pa.amount;
-      marks.push({ row: i + 1, state: '이체파일생성' });
+      marks.push({ row: i + 1, state: '이체파일생성', rid: rid, lr: lr, amount: pa.amount });
     }
     var res = { count: rows.length, total: total, free: free, skipped: skipped, url: '' };
     if (opts.dryRun || (!rows.length && !free)) { res.preview = check; return res; }
@@ -134,6 +134,8 @@ function makeTransferFile(opts) {
       sh.getRange(m.row, col('지급상태') + 1).setValue(m.state);
       if (m.state === '이체파일생성') sh.getRange(m.row, col('이체파일') + 1).setValue(fileName);
       if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0); } catch (e) { logError_('알림톡(무상수거)', e); } }
+      // 2026-11-16 대표 결정: 입금 '예정' 안내를 이체 파일 만들 때 먼저 보내고, 송금은 그 뒤에
+      if (m.state === '이체파일생성' && m.amount > 0) { try { alimSettled_(m.rid, m.lr, m.amount); } catch (e) { logError_('알림톡(입금 예정)', e); } }
     });
     return res;
   } finally { lock.releaseLock(); }
@@ -141,7 +143,7 @@ function makeTransferFile(opts) {
 
 /**
  * 은행에서 실제 송금을 마친 뒤 실행: 해당 이체 파일의 예약을 '입금완료'로 표시.
- * (나중에 알림톡 '입금 완료 안내'를 여기서 보낸다)
+ * (입금 예정 알림톡은 이체 파일 만들 때 이미 보냄 — 여기서는 표시만)
  */
 function markTransferPaid(fileName) {
   var sh = sheet_(SHEET_BOOK, BOOK_HEADERS);
@@ -151,11 +153,6 @@ function markTransferPaid(fileName) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][cF]) === String(fileName) && String(data[i][cS]) === '이체파일생성') {
       sh.getRange(i + 1, cS + 1).setValue('입금완료'); sh.getRange(i + 1, cD + 1).setValue(today); n++;
-      try { // 입금 완료 알림톡
-        var rid = String(data[i][hdr.indexOf('예약번호')]), d = fmtDate_(data[i][hdr.indexOf('수거일')]);
-        var lr = ledgerRowFor_(null, d, rid), pa = lr && payAmount_(lr, transferUnitPrice_());
-        if (pa && pa.ok && pa.amount > 0) alimSettled_(rid, lr, pa.amount);
-      } catch (e) { logError_('알림톡(입금 완료)', e); }
     }
   }
   return { updated: n };

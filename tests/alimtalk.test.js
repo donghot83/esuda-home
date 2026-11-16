@@ -63,7 +63,7 @@ test('발송 실패해도 예약은 확정, 기록에 실패 사유', () => {
   assert.match(e.sheet('알림톡기록').rows[1][4], /^실패 400 템플릿 없음/);
 });
 
-test('입금 완료·무상수거 알림톡: 이체 파일 흐름에 맞춰 보냄 (계좌는 끝 4자리만)', () => {
+test('입금 예정·무상수거 알림톡: 이체 파일 만들 때 보냄, 입금완료 처리 때는 다시 안 보냄 (계좌는 끝 4자리만)', () => {
   const e = env(READY);
   const a = e.post(sub({ date: '2026-11-16', name: '입금손님', account: '9998887776' }));
   const b = e.post(sub({ date: '2026-11-16', name: '무상손님' }));
@@ -75,7 +75,9 @@ test('입금 완료·무상수거 알림톡: 이체 파일 흐름에 맞춰 보�
   const free = e.fetches.find(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE');
   assert.strictEqual(free.body.messages[0].kakaoOptions.variables['#{무게}'], '10');
   const file = e.sheet('예약').rows.find(x => x && x[0] === a.reservationId)[e.sheet('예약').rows[0].indexOf('이체파일')];
+  const before = e.fetches.length;
   e.ctx.markTransferPaid(file);
+  assert.strictEqual(e.fetches.length, before); // 송금 표시 때는 추가 발송 없음
   const paid = e.fetches.find(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPPAID');
   const v = paid.body.messages[0].kakaoOptions.variables;
   assert.strictEqual(v['#{금액}'], '10,000'); assert.strictEqual(v['#{계좌끝4자리}'], '7776'); assert.strictEqual(v['#{이름}'], '입금손님');

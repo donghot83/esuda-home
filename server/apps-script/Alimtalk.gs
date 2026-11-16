@@ -4,7 +4,7 @@
  * 보내는 때
  *   ① 예약 완료  : 신청이 확정된 직후 (submit_)
  *   ② 픽업 완료  : 기사님 화면에서 [수거 완료]를 처음 누를 때 (신청페이지 예약만 — 연락처가 있는 예약)
- *   ③ 입금 완료  : 이체 파일 '입금완료 처리' 때 (markTransferPaid)
+ *   ③ 입금 예정  : 이체 파일을 만들 때 (makeTransferFile) — 2026-11-16 대표 결정: 예정 안내 후 송금
  *   ④ 무상수거   : 이체 파일 만들 때 15kg 미만으로 무상수거 표시되는 예약
  *   ⑤ 당일 안내  : 매일 오후 5시 30분 그날 수거할 신청페이지 예약에게 (저녁 7시~새벽 4시 방문, [준비 완료]·[채팅 문의] 버튼)
  *
@@ -19,7 +19,7 @@
 
 var SHEET_ALIM = '알림톡기록';
 var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picked: { prop: 'TPL_PICKED', label: '픽업 완료' },
-  paid: { prop: 'TPL_PAID', label: '입금 완료' }, free: { prop: 'TPL_FREE', label: '무상수거' },
+  paid: { prop: 'TPL_PAID', label: '입금 예정' }, free: { prop: 'TPL_FREE', label: '무상수거' },
   sameday: { prop: 'TPL_SAMEDAY', label: '당일 안내' } };
 
 function alimConf_() {
@@ -98,7 +98,7 @@ function alimPicked_(rid) {
   return sendAlimtalk_('picked', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{예약번호}': rid });
 }
 
-/** ③ 입금 완료 / ④ 무상수거 — lr = 장부 줄 {weight, loss}, amount = 입금액(0이면 무상) */
+/** ③ 입금 예정 / ④ 무상수거 — lr = 장부 줄 {weight, loss}, amount = 입금액(0이면 무상) */
 function alimSettled_(rid, lr, amount) {
   var r = bookRowByRid_(rid);
   if (!r) return { ok: false, skipped: 'no_booking' };
