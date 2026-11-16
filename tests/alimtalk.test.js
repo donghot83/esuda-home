@@ -87,3 +87,32 @@ test('점검 메일에 알림톡 준비 상태(꺼짐·남은 것)', () => {
   e.ctx.dailyReport();
   assert.match(e.mails[e.mails.length - 1].body, /알림톡: 꺼짐 \(준비 남음: API 키/);
 });
+
+test('2026-11-16 당일 안내: 오늘 수거할 확정 예약에만 보냄(취소·다른 날 제외), 버튼용 예약번호 변수 포함, 같은 날 두 번 안 보냄', () => {
+  const e = createEnv({ now: '2026-11-17T08:30:00Z', ledger: { '11월 매입금액': [HEAD] }, props: Object.assign({}, READY, { TPL_SAMEDAY: 'KA01TPSAME' }) });
+  // 11/17 17:30 기준. 예약은 그 전에 들어온 상황을 시트에 직접 만든다
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-17', name: '오늘고객', address: { sido: '서울', sigungu: '강남구', bname: '역삼동', roadAddress: '서울 강남구 가상로 1', zonecode: '00000' } }));
+  const b = e0.post(sub({ date: '2026-11-18', name: '내일고객' }));
+  assert.ok(a.ok && b.ok);
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const r = e.ctx.sendSameDayNotices();
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(r)), { sent: 1, skipped: 0, failed: 0 });
+  const m = e.fetches[0].body.messages[0];
+  assert.strictEqual(m.kakaoOptions.templateId, 'KA01TPSAME');
+  assert.strictEqual(m.kakaoOptions.variables['#{예약번호}'], a.reservationId);
+  assert.strictEqual(m.kakaoOptions.variables['#{주소}'], '서울 강남구 가상로 1 101호');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(e.ctx.sendSameDayNotices())), { sent: 0, skipped: 1, failed: 0 }); // 이미 보냄
+});
+
+test('2026-11-16 준비 완료 버튼: 예약번호로 준비완료 시각 기록, 다시 눌러도 그대로, 이상한 번호·없는 번호는 거절, 개인정보 안 돌려줌', () => {
+  const e = env({});
+  const a = e.post(sub());
+  const r1 = e.post({ action: 'ready', reservationId: a.reservationId.toLowerCase() });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(r1)), { ok: true, date: '2026-11-18' });
+  const h = e.sheet('예약').rows[0], row = e.sheet('예약').rows[1];
+  assert.match(String(row[h.indexOf('준비완료')]), /^\d\d-\d\d \d\d:\d\d$/);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(e.post({ action: 'ready', reservationId: a.reservationId }))), { ok: true, already: true, date: '2026-11-18' });
+  assert.strictEqual(e.post({ action: 'ready', reservationId: 'x' }).error, 'bad_id');
+  assert.strictEqual(e.post({ action: 'ready', reservationId: 'ESD-261118-ZZZZ' }).error, 'not_found');
+});

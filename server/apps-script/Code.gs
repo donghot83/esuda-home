@@ -137,7 +137,8 @@ function doPost(e) {
     if (body.action === 'submit') return json_(submit_(body));
     if (body.action === 'photo') return json_(photo_(body));
     if (body.action === 'photoPre') return json_(photoPre_(body));   // 사진 미리 올리기
-    if (body.action === 'track') return json_(track_(body));   // 방문 단계 기록 (개인정보 없음)
+    if (body.action === 'track') return json_(track_(body));
+    if (body.action === 'ready') return json_(ready_(body));   // 2026-11-16 당일 알림톡 [준비 완료] 버튼   // 방문 단계 기록 (개인정보 없음)
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만

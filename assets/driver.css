@@ -57,3 +57,4 @@ button{font:inherit;cursor:pointer}
 .dv-pin.done{background:#2f9a14}
 .dv-pin.pv{background:#64748b}
 .dv-pin.start{background:#111;width:34px;font-size:11px;border-radius:8px}
+.dv-row.ready{color:#1f7d3a;font-weight:700}

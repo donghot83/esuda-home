@@ -6,19 +6,21 @@
  *   ② 픽업 완료  : 기사님 화면에서 [수거 완료]를 처음 누를 때 (신청페이지 예약만 — 연락처가 있는 예약)
  *   ③ 입금 완료  : 이체 파일 '입금완료 처리' 때 (markTransferPaid)
  *   ④ 무상수거   : 이체 파일 만들 때 15kg 미만으로 무상수거 표시되는 예약
+ *   ⑤ 당일 안내  : 매일 오후 5시 30분 그날 수거할 신청페이지 예약에게 (저녁 7시~새벽 4시 방문, [준비 완료]·[채팅 문의] 버튼)
  *
  * 켜는 방법 (전부 스크립트 속성 — 비밀값은 대표님이 Apps Script '프로젝트 설정 → 스크립트 속성'에 직접 넣음, 저장소·로그에 남기지 않음)
  *   SOLAPI_KEY, SOLAPI_SECRET : 솔라피 콘솔 → API Key 관리
  *   SOLAPI_PFID               : 솔라피에 연결한 카카오채널 발신프로필 ID (KA01PF…)
  *   SOLAPI_FROM               : 솔라피에 등록한 발신번호 (알림톡 실패 시 문자로 대신 보낼 때)
- *   TPL_BOOKED / TPL_PICKED / TPL_PAID / TPL_FREE : 심사 통과한 템플릿 ID (KA01TP…) — 없는 종류는 안 보냄
+ *   TPL_BOOKED / TPL_PICKED / TPL_PAID / TPL_FREE / TPL_SAMEDAY : 심사 통과한 템플릿 ID (KA01TP…) — 없는 종류는 안 보냄
  *   ALIMTALK_ON = 1           : 위가 다 준비된 뒤 켜는 스위치 (0 이나 없으면 아무것도 안 보냄)
  * 기록: 예약 서버 시트 '알림톡기록' 탭 (시각 | 종류 | 예약번호 | 받는번호 뒷4자리 | 결과) — 같은 예약·같은 종류는 한 번만 보냄
  */
 
 var SHEET_ALIM = '알림톡기록';
 var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picked: { prop: 'TPL_PICKED', label: '픽업 완료' },
-  paid: { prop: 'TPL_PAID', label: '입금 완료' }, free: { prop: 'TPL_FREE', label: '무상수거' } };
+  paid: { prop: 'TPL_PAID', label: '입금 완료' }, free: { prop: 'TPL_FREE', label: '무상수거' },
+  sameday: { prop: 'TPL_SAMEDAY', label: '당일 안내' } };
 
 function alimConf_() {
   var p = PropertiesService.getScriptProperties();
@@ -116,4 +118,27 @@ function alimStatus_() {
   if (!c.pfId) miss.push('카카오채널 연결(PFID)');
   Object.keys(ALIM_KINDS).forEach(function (k) { if (!c.tpl(k)) miss.push(ALIM_KINDS[k].label + ' 템플릿'); });
   return { on: c.on, missing: miss };
+}
+
+/** ⑤ 당일 안내 — 오늘 수거할 확정 예약(신청페이지) 전부. 트리거: 매일 17:30 (setupSameDay). 반환 {sent, skipped, failed} */
+function sendSameDayNotices() {
+  var R = rules_(), today = R.todayKST(new Date()), b = bookData_(), out = { sent: 0, skipped: 0, failed: 0 };
+  for (var i = 1; i < b.data.length; i++) {
+    var row = b.data[i], g = function (h) { var k = b.col(h); return k >= 0 ? String(row[k] == null ? '' : row[k]) : ''; };
+    if (g('확정상태') !== '확정' || fmtDate_(row[b.col('수거일')]) !== today) continue;
+    var rid = g('예약번호');
+    var r = sendAlimtalk_('sameday', rid, g('연락처'), {
+      '#{이름}': g('이름'), '#{예약번호}': rid,
+      '#{주소}': ((g('도로명주소') || g('지번주소')) + ' ' + g('상세주소')).trim()
+    });
+    if (r.ok && !r.skipped) out.sent++; else if (r.ok || r.skipped) out.skipped++; else out.failed++;
+  }
+  return out;
+}
+
+/** 당일 안내 트리거 설치 (한 번만 실행) — 매일 오후 5시 30분쯤 */
+function setupSameDay() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'sendSameDayNotices') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sendSameDayNotices').timeBased().everyDays(1).atHour(17).nearMinute(30).inTimezone('Asia/Seoul').create();
+  return 'ok';
 }

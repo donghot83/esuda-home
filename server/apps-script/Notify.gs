@@ -126,3 +126,22 @@ function tidyPrePhotos_() {
   for (var j = del.length - 1; j >= 0; j--) sh.deleteRow(del[j]);
   return n;
 }
+
+/* ===== 고객 '준비 완료' (2026-11-16) — 당일 알림톡 [준비 완료] 버튼 → esuda.kr/ready/?id=예약번호 → 여기 =====
+ * 예약 시트 '준비완료' 칸에 시각을 적는다. 기사님 화면에 '✓ 준비완료'로 보인다. 돌려주는 값에 개인정보 없음.
+ */
+function ready_(b) {
+  var rid = String(b && b.reservationId || '').toUpperCase().trim();
+  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid)) return { ok: false, error: 'bad_id' };
+  var sh = sheet_(SHEET_BOOK, BOOK_HEADERS), hdr = ensureBookHeaders_(sh, ['준비완료']);
+  var data = sh.getDataRange().getValues(), cId = hdr.indexOf('예약번호'), cSt = hdr.indexOf('확정상태'), cR = hdr.indexOf('준비완료'), cD = hdr.indexOf('수거일');
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][cId]) !== rid) continue;
+    if (String(data[i][cSt]) !== '확정') return { ok: false, error: 'not_active' };
+    var date = fmtDate_(data[i][cD]);
+    if (String(data[i][cR] || '')) return { ok: true, already: true, date: date };
+    sh.getRange(i + 1, cR + 1).setValue(Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));
+    return { ok: true, date: date };
+  }
+  return { ok: false, error: 'not_found' };
+}

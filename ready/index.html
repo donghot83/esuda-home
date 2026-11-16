@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>수거 준비 완료 | 이수다</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root{--ink:#0f172a;--sub:#64748b;--green:#2f9a14;--green-d:#1f7d3a;--soft:#eef7ea;--bg:#f4f7f5;--err:#d92d20}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+main{max-width:440px;margin:0 auto;padding:48px 16px}
+.card{background:#fff;border-radius:18px;padding:28px 22px;text-align:center;box-shadow:0 2px 12px rgba(15,23,42,.06)}
+.ic{width:64px;height:64px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:32px;background:var(--soft);color:var(--green-d)}
+.ic.bad{background:#fff1f0;color:var(--err)}
+h1{font-size:21px;margin:0 0 10px}
+p{color:var(--sub);font-size:15px;line-height:1.6;margin:0 0 8px}
+.id{display:inline-block;margin:6px 0 14px;padding:4px 10px;border-radius:8px;background:#f1f5f9;font-size:14px;color:#334155}
+a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-top:18px;border-radius:12px;background:#fee500;color:#191919;font-weight:700;text-decoration:none}
+.spin{width:28px;height:28px;border:3px solid #d7e5d1;border-top-color:var(--green);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<main>
+  <div class="card" id="box">
+    <div class="ic"><div class="spin"></div></div>
+    <h1>준비 완료를 알리고 있어요…</h1>
+  </div>
+</main>
+<script src="../assets/apply-config.js?v=8"></script>
+<script>
+(function () {
+  var C = window.ESUDA_APPLY || {}, kakao = C.kakaoUrl || 'https://pf.kakao.com/_DxoHVG/chat';
+  var id = (new URLSearchParams(location.search).get('id') || '').toUpperCase().trim();
+  var box = document.getElementById('box');
+  function show(ok, title, msg) {
+    box.innerHTML = '<div class="ic' + (ok ? '' : ' bad') + '">' + (ok ? '✓' : '!') + '</div><h1>' + title + '</h1>' +
+      (/^ESD-\d{6}-[A-Z0-9]{4}$/.test(id) ? '<span class="id">예약번호 ' + id + '</span>' : '') +
+      '<p>' + msg + '</p><a class="btn" href="' + kakao + '">카카오채널로 문의하기</a>';
+  }
+  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(id) || !C.apiUrl) { show(false, '예약번호를 확인하지 못했어요', '알림톡의 [준비 완료] 버튼으로 다시 들어와 주세요.<br>계속 안 되면 카카오채널로 "준비 완료"라고 보내 주세요.'); return; }
+  var tries = 0;
+  (function send() {
+    fetch(C.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'ready', reservationId: id }), keepalive: true })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r && r.ok) return show(true, r.already ? '이미 준비 완료로 알려 주셨어요' : '준비 완료를 전달했어요', '오늘 저녁 7시 ~ 내일 새벽 4시 사이에 순서대로 방문해요.<br>감사합니다!');
+        if (r && r.error === 'not_active') return show(false, '취소된 예약이에요', '다시 수거를 원하시면 카카오채널로 알려 주세요.');
+        show(false, '예약을 찾지 못했어요', '카카오채널로 예약번호와 함께 "준비 완료"라고 보내 주세요.');
+      })
+      .catch(function () {
+        if (++tries < 3) return setTimeout(send, 1500 * tries);
+        show(false, '연결이 원활하지 않아요', '잠시 뒤 다시 눌러 주시거나, 카카오채널로 "준비 완료"라고 보내 주세요.');
+      });
+  })();
+})();
+</script>
+</body>
+</html>

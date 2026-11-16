@@ -82,6 +82,7 @@ function driverList_(b) {
         it.amount = g(br, '수거양');
         it.request = g(br, '요청사항');
         it.photo = g(br, '사진방식');
+        it.ready = g(br, '준비완료');
       }
       it.state = (st[it.id] || {}).state || '';
       if (cm) { it.cancelled = true; it.cancelAt = cm[1] || ''; it.state = '취소'; delete it.phone; delete it.entrance; }

@@ -69,6 +69,7 @@
       }
       var cls = it.state === '완료' ? ' done' : (it.state === '못함' ? ' fail' : '');
       var rows = '';
+      if (it.ready) rows += '<div class="dv-row ready"><span>고객</span>✓ 준비완료 ' + esc(String(it.ready).slice(6)) + '</div>';
       if (it.amount) rows += '<div class="dv-row"><span>수거양</span>' + esc(it.amount) + '</div>';
       if (it.place) rows += '<div class="dv-row"><span>놓을 곳</span>' + esc(it.place) + '</div>';
       if (it.entrance) rows += '<div class="dv-row code"><span>공동현관</span>' + esc(it.entrance) + '</div>';
