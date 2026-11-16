@@ -144,6 +144,8 @@ function doPost(e) {
     if (body.action === 'ready') return json_(ready_(body));   // 2026-11-16 당일 알림톡 [준비 완료] 버튼   // 방문 단계 기록 (개인정보 없음)
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
+    if (body.action === 'driverPhoto') return json_(driverPhoto_(body));   // 2026-11-16 기사님 수거 사진
+    if (body.action === 'pickupPhoto') return json_(pickupPhoto_(body));   // 고객 '수거 사진 보기' (사진코드로만)
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만
     if (body.action === 'markSynced') return json_(markSynced_(body.token, body.ids));
     return json_({ ok: false, error: 'unknown_action' });

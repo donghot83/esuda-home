@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>수거 사진 | 이수다</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root{--ink:#0f172a;--sub:#64748b;--green:#2f9a14;--green-d:#1f7d3a;--soft:#eef7ea;--bg:#f4f7f5;--err:#d92d20}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+main{max-width:520px;margin:0 auto;padding:28px 16px 40px}
+.card{background:#fff;border-radius:18px;padding:22px 18px;box-shadow:0 2px 12px rgba(15,23,42,.06)}
+h1{font-size:21px;margin:0 0 6px;text-align:center}
+p{color:var(--sub);font-size:15px;line-height:1.6;margin:0 0 8px;text-align:center}
+.ph{display:grid;gap:12px;margin-top:16px}
+.ph img{width:100%;border-radius:12px;background:#eef2f5;display:block}
+a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-top:18px;border-radius:12px;background:#fee500;color:#191919;font-weight:700;text-decoration:none}
+.spin{width:28px;height:28px;margin:10px auto;border:3px solid #d7e5d1;border-top-color:var(--green);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<main>
+  <div class="card" id="box">
+    <h1>수거 사진을 불러오고 있어요…</h1>
+    <div class="spin"></div>
+  </div>
+</main>
+<script src="../assets/apply-config.js?v=8"></script>
+<script>
+(function () {
+  var C = window.ESUDA_APPLY || {}, kakao = C.kakaoUrl || 'https://pf.kakao.com/_DxoHVG/chat';
+  var code = (new URLSearchParams(location.search).get('c') || '').toLowerCase().trim();
+  var box = document.getElementById('box');
+  function show(title, msg, imgs) {
+    box.innerHTML = '<h1>' + title + '</h1><p>' + msg + '</p>' +
+      (imgs && imgs.length ? '<div class="ph">' + imgs.map(function (d, i) { return '<img alt="수거 사진 ' + (i + 1) + '" src="data:image/jpeg;base64,' + d + '">'; }).join('') + '</div>' : '') +
+      '<a class="btn" href="' + kakao + '">카카오채널로 문의하기</a>';
+  }
+  if (!/^[a-z0-9]{12}$/.test(code) || !C.apiUrl) { show('사진을 찾지 못했어요', '알림톡의 [수거 사진 보기] 버튼으로 다시 들어와 주세요.'); return; }
+  var tries = 0;
+  (function load() {
+    fetch(C.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'pickupPhoto', code: code }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r && r.ok && r.photos && r.photos.length) return show('수거한 물품 사진', (r.date ? r.date + ' ' : '') + '기사님이 수거하면서 찍은 사진이에요.<br>센터에서 검수 후 입금해 드려요.', r.photos);
+        if (r && r.ok) return show('사진이 아직 없어요', '이번 수거는 사진 없이 진행됐어요. 궁금한 점은 카카오채널로 문의해 주세요.');
+        show('사진을 찾지 못했어요', '알림톡의 [수거 사진 보기] 버튼으로 다시 들어와 주세요.');
+      })
+      .catch(function () {
+        if (++tries < 3) return setTimeout(load, 1500 * tries);
+        show('연결이 원활하지 않아요', '잠시 뒤 다시 눌러 주세요.');
+      });
+  })();
+})();
+</script>
+</body>
+</html>

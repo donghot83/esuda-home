@@ -6,7 +6,8 @@
   var API = isLocal ? '/api' : CFG.apiUrl; // 로컬 미리보기는 가짜 서버
   var $ = function (id) { return document.getElementById(id); };
   var KEY_STORE = 'esuda_driver_key';
-  var st = { key: '', date: '', items: [], sort: 'ledger', busy: false };
+  var st = { key: '', date: '', items: [], sort: 'ledger', busy: false, choose: '', pending: null };
+  var PHOTO_MAX = 3;
 
   function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
   function save(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
@@ -70,6 +71,7 @@
       var cls = it.state === '완료' ? ' done' : (it.state === '못함' ? ' fail' : '');
       var rows = '';
       if (it.ready) rows += '<div class="dv-row ready"><span>고객</span>✓ 준비완료 ' + esc(String(it.ready).slice(6)) + '</div>';
+      if (it.photos || it.uploading) rows += '<div class="dv-row photo"><span>수거 사진</span>' + (it.uploading ? esc(it.uploading) : '📷 ' + it.photos + '장 올림') + '</div>';
       if (it.amount) rows += '<div class="dv-row"><span>수거양</span>' + esc(it.amount) + '</div>';
       if (it.place) rows += '<div class="dv-row"><span>놓을 곳</span>' + esc(it.place) + '</div>';
       if (it.entrance) rows += '<div class="dv-row code"><span>공동현관</span>' + esc(it.entrance) + '</div>';
@@ -85,7 +87,11 @@
           '<a class="map" href="' + map + '" target="_blank" rel="noopener">🗺 네이버지도</a>' +
           '<button type="button" class="ok" data-act="' + (it.state === '완료' ? '' : '완료') + '">' + (it.state === '완료' ? '✓ 완료됨 (되돌리기)' : '수거 완료') + '</button>' +
           '<button type="button" class="no" data-act="' + (it.state === '못함' ? '' : '못함') + '">' + (it.state === '못함' ? '못함 취소' : '못 가져옴') + '</button>' +
-        '</div></li>';
+        '</div>' +
+        (st.choose === it.id && it.state !== '완료' ? '<div class="dv-pick"><b>물품 사진을 찍을까요?</b><small>' + (it.rid ? '찍은 사진은 고객 픽업 완료 알림톡에 [수거 사진 보기]로 같이 가요.' : '사진은 회사 드라이브에 보관돼요.') + '</small>' +
+          '<button type="button" class="cam" data-photo="1">📷 사진 찍고 완료</button><button type="button" data-photo="0">사진 없이 완료</button><button type="button" class="x" data-photo="x">닫기</button></div>' : '') +
+        (it.state === '완료' && (it.photos || 0) < PHOTO_MAX && !it.uploading ? '<button type="button" class="dv-addphoto" data-addphoto="1">📷 사진 추가</button>' : '') +
+        '</li>';
     }).join('');
   }
 
@@ -119,14 +125,70 @@
     setTimeout(function () { map.invalidateSize(); map.fitBounds(b, { padding: [24, 24] }); }, 50);
   }
 
-  $('list').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-act]'); if (!b) return;
-    var li = b.closest('.dv-item'), id = li.getAttribute('data-id');
-    var it = st.items.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-    var prev = it.state; it.state = b.getAttribute('data-act'); render();
-    post({ action: 'driverMark', key: st.key, date: st.date, id: id, name: it.name, state: it.state }).then(function (r) {
+  function mark(it, state) {
+    var prev = it.state; it.state = state; st.choose = ''; render();
+    post({ action: 'driverMark', key: st.key, date: st.date, id: it.id, name: it.name, state: state }).then(function (r) {
       if (!r.ok) { it.state = prev; render(); alert('저장하지 못했어요. 다시 눌러 주세요.'); }
     }).catch(function () { it.state = prev; render(); alert('인터넷 연결을 확인하고 다시 눌러 주세요.'); });
+  }
+
+  /* 수거 사진 (2026-11-16): 휴대폰에서 1280px JPEG 로 줄여 한 장씩 올림 */
+  var fileIn = document.createElement('input');
+  fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.setAttribute('capture', 'environment'); fileIn.multiple = true; fileIn.hidden = true;
+  document.body.appendChild(fileIn);
+  function shrink(file) {
+    return new Promise(function (ok, bad) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); bad(new Error('img')); };
+      img.src = url;
+    });
+  }
+  fileIn.addEventListener('change', function () {
+    var pend = st.pending, files = Array.prototype.slice.call(fileIn.files || []); st.pending = null; fileIn.value = '';
+    if (!pend || !files.length) return;
+    var it = st.items.filter(function (x) { return x.id === pend.id; })[0]; if (!it) return;
+    files = files.slice(0, Math.max(0, PHOTO_MAX - (it.photos || 0)));
+    var i = 0, failed = false;
+    (function next() {
+      if (i >= files.length) {
+        it.uploading = '';
+        if (failed && pend.done) { render(); if (confirm('사진을 못 올렸어요. 사진 없이 완료할까요?')) mark(it, '완료'); return; }
+        if (failed) alert('사진을 못 올렸어요. 인터넷 연결을 확인하고 다시 올려 주세요.');
+        if (pend.done) mark(it, '완료'); else render();
+        return;
+      }
+      it.uploading = '사진 올리는 중… ' + (i + 1) + '/' + files.length; render();
+      shrink(files[i]).then(function (data) {
+        return post({ action: 'driverPhoto', key: st.key, date: st.date, id: it.id, name: it.name, data: data });
+      }).then(function (r) {
+        if (r && r.ok) it.photos = r.count; else failed = true;
+        i++; next();
+      }).catch(function () { failed = true; i++; next(); });
+    })();
+  });
+
+  $('list').addEventListener('click', function (e) {
+    var li = e.target.closest('.dv-item'); if (!li) return;
+    var id = li.getAttribute('data-id');
+    var it = st.items.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+    var ph = e.target.closest('button[data-photo]');
+    if (ph) {
+      var w = ph.getAttribute('data-photo');
+      if (w === 'x') { st.choose = ''; render(); return; }
+      if (w === '0') { mark(it, '완료'); return; }
+      st.pending = { id: id, done: true }; fileIn.click(); return;   // 카메라는 누른 순간에 열어야 함(아이폰)
+    }
+    if (e.target.closest('button[data-addphoto]')) { st.pending = { id: id, done: false }; fileIn.click(); return; }
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var act = b.getAttribute('data-act');
+    if (act === '완료') { st.choose = st.choose === id ? '' : id; render(); return; }   // 사진 찍을지 먼저 물어봄
+    mark(it, act);
   });
   Array.prototype.forEach.call(document.querySelectorAll('.dv-sort button'), function (b) {
     b.addEventListener('click', function () {

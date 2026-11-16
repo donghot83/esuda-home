@@ -116,7 +116,7 @@ function createEnv(opts = {}) {
       getFileById: id => { const f = drive.files.find(x => x.getId() === id); if (!f) throw new Error('no file'); return f; },
       getFoldersByName: n => { const l = Object.values(drive.folders).filter(f => f.name === n); return { hasNext: () => l.length > 0, next: () => l.shift() }; },
       createFolder: n => { const id = 'F' + Object.keys(drive.folders).length; const f = { name: n, getId: () => id,
-        createFile: b => { const id = 'FILE' + drive.files.length; const file = { name: b.name, bytes: b.bytes, trashed: false, getId: () => id, getUrl: () => 'https://drive.google.com/fake/' + id, getName: () => file.name, setName(n) { file.name = n; return file; }, setTrashed(t) { file.trashed = t; return file; } }; drive.files.push(file); return file; } };
+        createFile: b => { const id = 'FILE' + drive.files.length; const file = { name: b.name, bytes: b.bytes, trashed: false, getId: () => id, getUrl: () => 'https://drive.google.com/fake/' + id, getName: () => file.name, getBlob: () => ({ getBytes: () => file.bytes }), setName(n) { file.name = n; return file; }, setTrashed(t) { file.trashed = t; return file; } }; drive.files.push(file); return file; } };
         drive.folders[id] = f; return f; }
     },
     MailApp: { sendEmail: m => { mails.push(m); } },
@@ -132,6 +132,7 @@ function createEnv(opts = {}) {
     },
     Utilities: {
       base64Decode: d => Array.from(Buffer.from(d, 'base64')),
+      base64Encode: b => Buffer.from(b).toString('base64'),
       getUuid: () => require('crypto').randomUUID(),
       computeHmacSha256Signature: (v, k) => Array.from(require('crypto').createHmac('sha256', k).update(v).digest()).map(b => (b > 127 ? b - 256 : b)),
       newBlob: (bytes, type, name) => ({ bytes, type, name }),

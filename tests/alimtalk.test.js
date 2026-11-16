@@ -121,3 +121,39 @@ test('2026-11-16 준비 완료 버튼: 예약번호로 준비완료 시각 기�
   assert.strictEqual(e.post({ action: 'ready', reservationId: 'x' }).error, 'bad_id');
   assert.strictEqual(e.post({ action: 'ready', reservationId: 'ESD-261118-ZZZZ' }).error, 'not_found');
 });
+
+test('2026-11-16 기사님 수거 사진: 올리면 저장·기록, 사진 있으면 [수거 사진 보기] 템플릿(사진코드), 고객 페이지는 사진만', () => {
+  const e = env(Object.assign({}, READY, { TPL_PICKED_PHOTO: 'KA01TPPHOTO' }));
+  const r = e.post(sub({ date: '2026-11-16' }));
+  const img = Buffer.from('가짜사진').toString('base64');
+  assert.strictEqual(e.post({ action: 'driverPhoto', key: 'BAD', date: '2026-11-16', id: r.reservationId, data: img }).error, 'forbidden');
+  for (let i = 1; i <= 3; i++) assert.strictEqual(e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, name: '신청고객', data: img }).count, i);
+  assert.strictEqual(e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, data: img }).error, 'too_many');
+  const list = e.post({ action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
+  assert.strictEqual(list.items.find(x => x.rid === r.reservationId).photos, 3);
+  const before = e.fetches.length;
+  e.post({ action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, state: '완료' });
+  e.post({ action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, state: '완료' });
+  assert.strictEqual(e.fetches.length - before, 1);
+  const m = e.fetches[e.fetches.length - 1].body.messages[0];
+  assert.strictEqual(m.kakaoOptions.templateId, 'KA01TPPHOTO');
+  const code = m.kakaoOptions.variables['#{사진코드}'];
+  assert.match(code, /^[a-z0-9]{12}$/);
+  const p = e.post({ action: 'pickupPhoto', code });
+  assert.strictEqual(p.ok, true); assert.strictEqual(p.photos.length, 3); assert.strictEqual(p.photos[0], img);
+  assert.strictEqual(p.date, '11/16(월)');
+  assert.ok(!/신청고객|010|가상북로/.test(JSON.stringify(p)));
+  assert.strictEqual(e.post({ action: 'pickupPhoto', code: 'zzzzzzzzzzzz' }).error, 'not_found');
+  assert.strictEqual(e.post({ action: 'pickupPhoto', code: 'x' }).error, 'bad_code');
+});
+
+test('2026-11-16 사진 없이 완료하거나 사진 템플릿이 아직 없으면 기존 픽업 완료로', () => {
+  const e = env(READY); // TPL_PICKED_PHOTO 없음
+  const r = e.post(sub({ date: '2026-11-16' }));
+  e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, data: Buffer.from('x').toString('base64') });
+  e.post({ action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, state: '완료' });
+  assert.strictEqual(e.fetches[e.fetches.length - 1].body.messages[0].kakaoOptions.templateId, 'KA01TPPICK');
+  // 카톡 예약도 사진은 저장됨 (알림톡은 없음)
+  e.ledger['11월 매입금액'].rows.push([null, D('2026-11-16'), '카톡손님', '은평구', '가상로']);
+  assert.strictEqual(e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: 'K:카톡손님|가상로', name: '카톡손님', data: Buffer.from('y').toString('base64') }).ok, true);
+});
