@@ -58,14 +58,15 @@ function ledgerRowFor_(lss, dateStr, rid) {
   return null;
 }
 
-/** 지급액 계산: 장부 금액이 숫자면 그대로, 아니면 (무게-로스) ≥ 15kg 일 때 × 단가 */
+/** 지급액 계산: 장부 금액이 숫자면 그대로('무상수거' 글자면 0), 아니면 장부와 같은 식 — 최종(무게-로스) ≥ 15kg 일 때 최종×단가 - 로스×로스단가 */
 function payAmount_(lr, unit) {
   var w = +lr.weight;
   if (!(w > 0)) return { ok: false, reason: '무게 없음' };
   if (typeof lr.amount === 'number' && isFinite(lr.amount)) return { ok: true, amount: Math.round(lr.amount), source: '장부' };
-  var net = w - (+lr.loss || 0);
+  if (String(lr.amount || '').indexOf('무상') >= 0) return { ok: true, amount: 0, source: '장부' };
+  var loss = +lr.loss || 0, net = w - loss;
   if (net < 15) return { ok: true, amount: 0, source: '계산' };
-  return { ok: true, amount: Math.round(net * unit), source: '계산' };
+  return { ok: true, amount: Math.round(net * unit - loss * lossUnitPrice_()), source: '계산' };
 }
 
 function digitsOnly_(s) { return String(s || '').replace(/[^0-9]/g, ''); }
@@ -94,9 +95,10 @@ function makeTransferFile(opts) {
       if (String(r[col('이체파일')] || '') || String(r[col('지급상태')] || '')) continue; // 이미 처리
       var rid = String(r[col('예약번호')]), date = fmtDate_(r[col('수거일')]);
       var lr = ledgerRowFor_(lss, date, rid);
-      if (!lr) { skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
+      var notYet = date > Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'); // 아직 수거 전 → '확인 필요'로 띄우지 않음
+      if (!lr) { if (!notYet) skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
       var pa = payAmount_(lr, unit);
-      if (!pa.ok) { skipped.push({ 예약번호: rid, 이유: pa.reason }); continue; }
+      if (!pa.ok) { if (!notYet) skipped.push({ 예약번호: rid, 이유: pa.reason }); continue; }
       if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거', rid: rid, lr: lr }); continue; }
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
@@ -172,6 +174,7 @@ function onOpen() {
       .addSeparator()
       .addItem('신한 다건이체 파일 만들기', 'menuMakeTransfer_')
       .addItem('이체 파일 입금완료 처리', 'menuMarkPaid_')
+      .addItem('장부 금액 수식 채우기 (신청페이지 줄)', 'menuFillCalc_')
       .addToUi();
   } catch (e) {}
 }
@@ -180,13 +183,34 @@ function menuMakeTransfer_() {
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
   var msg = '이체 대상 ' + r.count + '건, 합계 ' + r.total.toLocaleString() + '원\n무상수거 ' + r.free + '건';
   if (r.skipped.length) msg += '\n\n확인 필요 ' + r.skipped.length + '건:\n' + r.skipped.map(function (s) { return s.예약번호 + ' - ' + s.이유; }).join('\n');
-  if (r.url) msg += '\n\n파일: ' + r.url + '\n→ 파일 > 다운로드 > Microsoft Excel 로 받아 신한 BizBank 이체 > 대량이체 > 자금이체 등록 > 파일불러오기 (첫 행 제외 체크)';
+  if (r.url) {
+    msg += '\n\n파일: ' + r.url + '\n\n엑셀 바로 받기: ' + r.url.replace(/\/edit.*$/, '') + '/export?format=xlsx' +
+      '\n→ 신한 BizBank 대량이체 > 파일불러오기 (첫 행 제외) > 수취인일괄조회 > 다음·승인' +
+      '\n→ 송금 끝나면 메뉴 「이체 파일 입금완료 처리」';
+  }
   ui.alert(msg);
+}
+function menuFillCalc_() {
+  SpreadsheetApp.getUi().alert('신청페이지 줄 ' + fillLedgerCalc() + '곳에 금액 수식을 넣었어요.');
+}
+/** 아직 입금완료 처리 안 한 이체 파일 이름들 (최근 것 먼저) */
+function pendingTransferFiles_() {
+  var sh = sheet_(SHEET_BOOK, BOOK_HEADERS), hdr = ensureTransferHeaders_(sh), data = sh.getDataRange().getValues();
+  var cF = hdr.indexOf('이체파일'), cS = hdr.indexOf('지급상태'), seen = {}, out = [];
+  for (var i = 1; i < data.length; i++) {
+    var f = String(data[i][cF] || '');
+    if (f && String(data[i][cS]) === '이체파일생성' && !seen[f]) { seen[f] = 1; out.push(f); }
+  }
+  return out.sort().reverse();
 }
 function menuMarkPaid_() {
   var ui = SpreadsheetApp.getUi();
-  var p = ui.prompt('송금을 마친 이체 파일 이름을 붙여 넣어 주세요 (예: [신한 다건이체] 2026-11-17 10:30)');
+  var files = pendingTransferFiles_();
+  if (!files.length) { ui.alert('입금완료 처리할 이체 파일이 없어요.'); return; }
+  var p = ui.prompt('송금을 마친 이체 파일',
+    '아직 입금완료 안 한 파일:\n' + files.join('\n') + '\n\n비워 두고 확인을 누르면 가장 최근 파일(' + files[0] + ')을 처리해요.', ui.ButtonSet.OK_CANCEL);
   if (p.getSelectedButton() !== ui.Button.OK) return;
-  var r = markTransferPaid(p.getResponseText().trim());
-  ui.alert(r.updated + '건을 입금완료로 표시했어요.');
+  var name = p.getResponseText().trim() || files[0];
+  var r = markTransferPaid(name);
+  ui.alert(name + '\n' + r.updated + '건을 입금완료로 표시했어요.');
 }

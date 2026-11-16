@@ -47,6 +47,8 @@ function makeGrid(name, rows) {
         setNumberFormat(f) { fit(r); (rows[r - 1].fmt = rows[r - 1].fmt || {})[c] = f; return rng; },
         getNumberFormats() { return Array.from({ length: nr || 1 }, (_, i) => [((rows[r - 1 + i] || {}).fmt || {})[c] || '']); },
         getValue() { return (rows[r - 1] || [])[c - 1]; },
+        setFormulas(fs) { fs.forEach((row, i) => row.forEach((f, j) => { fit(r + i); (rows[r - 1 + i].f = rows[r - 1 + i].f || {})[c + j] = f; })); return rng; },
+        getFormulas() { return Array.from({ length: nr || 1 }, (_, i) => Array.from({ length: nc || 1 }, (_, j) => ((rows[r - 1 + i] || {}).f || {})[c + j] || '')); },
         setBackground(v) { fit(r); rows[r - 1].bg = v; return rng; },
         setFontColor(v) { fit(r); rows[r - 1].fg = v; return rng; },
         setFontLine(v) { fit(r); rows[r - 1].line = v; return rng; },

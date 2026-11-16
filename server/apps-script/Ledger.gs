@@ -16,6 +16,39 @@
  */
 
 var LEDGER_COL = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, memo: 11 };
+// 2026-11-16: 직원 줄과 같은 계산 — 최종(H)=무게-로스, 금액(I)=최종×단가-로스×로스단가(최종 15kg 미만이면 '무상수거'), 로스금액(J)=로스×로스단가
+var LEDGER_CALC_COL = 8; // H, I, J
+function lossUnitPrice_() {
+  var v = PropertiesService.getScriptProperties().getProperty('TRANSFER_LOSS_PRICE');
+  return v ? +v : 200;
+}
+function ledgerCalcFormulas_(row) {
+  var u = transferUnitPrice_(), lu = lossUnitPrice_(), F = 'F' + row, G = 'G' + row, H = 'H' + row;
+  return [['=IF(' + F + '="","",' + F + '-N(' + G + '))',
+           '=IF(' + F + '="","",IF(' + H + '>=15,' + H + '*' + u + '-N(' + G + ')*' + lu + ',"무상수거"))',
+           '=IF(N(' + G + ')=0,"",' + G + '*' + lu + ')']];
+}
+function setLedgerCalc_(sh, row) { sh.getRange(row, LEDGER_CALC_COL, 1, 3).setFormulas(ledgerCalcFormulas_(row)); }
+
+/** 신청페이지 줄 중 계산 수식이 없는 줄에 수식 채우기 (지난달~두 달 뒤). 직원이 만든 줄은 건드리지 않음 */
+function fillLedgerCalc() {
+  var R = rules_(), today = R.todayKST(new Date()), done = {}, n = 0;
+  [-31, 0, 31, 62].forEach(function (k) {
+    var d0 = R.addDays(today, k), lss = ledgerOpen_(d0), sh = lss && ledgerMonthSheet_(lss, d0);
+    if (!sh) return;
+    var key = d0.slice(0, 4) + sh.getName();
+    if (done[key]) return; done[key] = 1;
+    var v = sh.getDataRange().getValues();
+    var f = sh.getRange(1, LEDGER_CALC_COL, v.length, 3).getFormulas();
+    for (var i = 1; i < v.length; i++) {
+      if (!/^ESD-\d{6}-\w{4} 신청페이지/.test(String(v[i][LEDGER_COL.memo - 1] || ''))) continue;
+      if ((f[i] || []).join('')) continue;                                       // 이미 수식 있음
+      if ([7, 8, 9].some(function (j) { return v[i][j] !== '' && v[i][j] != null; })) continue; // 직원이 값을 직접 넣음
+      setLedgerCalc_(sh, i + 1); n++;
+    }
+  });
+  return n;
+}
 var LEDGER_GAP = 2; // 날짜 묶음 사이 빈 줄 수
 
 /**
@@ -131,6 +164,7 @@ function ledgerAppend_(c, rid) {
   sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
   sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
+  try { setLedgerCalc_(sh, at); } catch (e) { logError_('장부 수식', e); }
   try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
   bumpLedgerCount_(c.date, 1);
   return { ok: true, row: at };

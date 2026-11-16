@@ -32,10 +32,10 @@ test('무게가 적힌 예약만 이체 파일에: 은행코드·계좌(숫자�
   weigh(env, a.reservationId, 40);              // 장부 금액 비어 있음 → 40×250 = 10,000 계산
   weigh(env, b.reservationId, 30, 7250);         // 장부 금액(I열) 그대로 7,250
   weigh(env, c.reservationId, 12);               // 15kg 미만 → 무상수거
-  // d 는 무게 없음 → 확인 필요
+  // d 는 무게 없음 — 수거일(11/16)이 아직 안 와서 '확인 필요'로 띄우지 않음
   const r = env.ctx.makeTransferFile();
   assert.strictEqual(r.count, 2); assert.strictEqual(r.total, 17250); assert.strictEqual(r.free, 1);
-  assert.strictEqual(JSON.stringify(r.skipped.map(s => s.이유)), JSON.stringify(['무게 없음']));
+  assert.strictEqual(JSON.stringify(r.skipped.map(s => s.이유)), JSON.stringify([]));
   const out = env.created[0];
   assert.match(out.name, /^\[신한 다건이체\] /);
   const up = out.getSheetByName('업로드용').rows;
@@ -70,4 +70,35 @@ test('미리보기(dryRun)는 파일·표시를 만들지 않음', () => {
   assert.strictEqual(r.count, 1); assert.strictEqual(env.created.length, 0);
   const book = env.sheet('예약').rows, h = book[0];
   assert.ok(!book[1][h.indexOf('지급상태')]);
+});
+
+test('2026-11-16: 신청페이지 예약이 장부에 들어갈 때 최종·금액·로스금액 수식이 같이 들어감', () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  const a = env.post(sub('가상수식', '신한은행', '0110123456789'));
+  const sh = env.ledger['11월 매입금액'];
+  const i = sh.rows.findIndex(r => r && String(r[10] || '').includes(a.reservationId)), row = i + 1;
+  const f = sh.rows[i].f || {};
+  assert.strictEqual(f[8], '=IF(F' + row + '="","",F' + row + '-N(G' + row + '))');
+  assert.strictEqual(f[9], '=IF(F' + row + '="","",IF(H' + row + '>=15,H' + row + '*250-N(G' + row + ')*200,"무상수거"))');
+  assert.strictEqual(f[10], '=IF(N(G' + row + ')=0,"",G' + row + '*200)');
+  // 이미 수식이 있으니 채우기는 0곳
+  assert.strictEqual(env.ctx.fillLedgerCalc(), 0);
+  // 수식이 없는 신청페이지 줄(예전 줄)은 채움, 직원 줄은 안 건드림
+  delete sh.rows[i].f;
+  assert.strictEqual(env.ctx.fillLedgerCalc(), 1);
+  assert.ok(sh.rows[i].f[9]);
+  assert.ok(!(sh.rows[1].f));
+});
+
+test("2026-11-16: 이체 금액 = (무게-로스)×250 - 로스×200, 장부가 '무상수거'면 0", () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  const a = env.post(sub('가상로스', '신한은행', '0110123456789'));
+  const b = env.post(sub('가상무상', '카카오뱅크', '3333012345678'));
+  const sh = env.ledger['11월 매입금액'];
+  const ra = sh.rows.find(r => r && String(r[10] || '').includes(a.reservationId));
+  const rb = sh.rows.find(r => r && String(r[10] || '').includes(b.reservationId));
+  ra[5] = 20; ra[6] = 1;               // 최종 19kg → 19×250 - 1×200 = 4,550
+  rb[5] = 20.5; rb[6] = 6.5; rb[8] = '무상수거'; // 장부가 무상수거
+  const r = env.ctx.makeTransferFile();
+  assert.strictEqual(r.count, 1); assert.strictEqual(r.total, 4550); assert.strictEqual(r.free, 1);
 });
