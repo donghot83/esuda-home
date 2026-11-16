@@ -95,7 +95,7 @@ function makeTransferFile(opts) {
       if (String(r[col('이체파일')] || '') || String(r[col('지급상태')] || '')) continue; // 이미 처리
       var rid = String(r[col('예약번호')]), date = fmtDate_(r[col('수거일')]);
       var lr = ledgerRowFor_(lss, date, rid);
-      var notYet = date > Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'); // 아직 수거 전 → '확인 필요'로 띄우지 않음
+      var notYet = date >= Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'); // 오늘 밤 수거 포함 아직 전 → '확인 필요'로 띄우지 않음
       if (!lr) { if (!notYet) skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
       var pa = payAmount_(lr, unit);
       if (!pa.ok) { if (!notYet) skipped.push({ 예약번호: rid, 이유: pa.reason }); continue; }
