@@ -299,5 +299,7 @@ function syncLedgerPending() {
   // 현황판은 무거워서 15분에 한 번 정도만 (실행 시간 한도 아끼기)
   var mm = new Date().getMinutes();
   if (res.added || mm % 15 < 5) { try { if (typeof refreshDashboard === 'function') refreshDashboard(); } catch (e) { logError_('현황판', e); } }
+  // 2026-11-17: 기사님 근무 시간(15시~새벽 4시)엔 오늘·내일 기사님 목록을 미리 만들어 둠 → 화면 열면 바로
+  try { if (typeof warmDriverCache_ === 'function') warmDriverCache_(new Date()); } catch (e) { logError_('기사님 목록 미리 만들기', e); }
   return res;
 }

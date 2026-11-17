@@ -233,3 +233,15 @@ function pickupPhoto_(b) {
   }
   return { ok: false, error: 'not_found' };
 }
+
+/** 5분 동기화 때: 기사님 근무 시간(15시~새벽 4시)이면 오늘·다음 날 목록을 캐시에 미리 (반환: 만든 날짜 수) */
+function warmDriverCache_(now) {
+  var R = rules_(), h = R.hourKST(now);
+  if (!(h >= 15 || h < 4)) return 0;
+  var d = driverDefaultDate_(now), cache = CacheService.getScriptCache(), n = 0;
+  [d, R.addDays(d, 1)].forEach(function (x) {
+    var js = JSON.stringify(driverListBuild_(x, R));
+    if (js.length < 95000) { cache.put('drv_' + x, js, DRIVER_CACHE_SEC); n++; }
+  });
+  return n;
+}

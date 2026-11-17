@@ -103,3 +103,12 @@ test('2026-11-17 속도: 목록 1분 캐시 — 다시 열면 캐시, 새로고�
   assert.ok(!r.cached); assert.strictEqual(r.items.find(x => x.id === id).state, '완료');
   assert.strictEqual(q({ key: 'BAD' }).error, 'forbidden');   // 캐시가 있어도 코드 확인 먼저
 });
+
+test('2026-11-17 5분 동기화가 기사님 근무 시간엔 오늘·내일 목록을 미리 만들어 둠 (낮엔 안 함)', () => {
+  const L = { '11월 매입금액': [HEAD, [null, D('2026-11-16'), '미리손님', '은평구', '가상로 7']] };
+  const env = createEnv({ now: NOW, ledger: L, props: { DRIVER_KEY: 'GOODKEY123' } });
+  assert.strictEqual(env.ctx.warmDriverCache_(new Date('2026-11-16T03:00:00Z')), 0);   // 낮 12시
+  assert.strictEqual(env.ctx.warmDriverCache_(new Date('2026-11-16T09:00:00Z')), 2);   // 저녁 6시
+  const r = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
+  assert.strictEqual(r.cached, true); assert.strictEqual(r.items[0].name, '미리손님');
+});
