@@ -42,7 +42,8 @@ function runChecks_() {
     var wd = new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, day)).getUTCDay();
     if (R.CONFIG.closedWeekdays.indexOf(wd) >= 0 && sc.openDates.indexOf(d) < 0) bad.weekend.push(rid + ' (' + dayLabel_(d) + ')');
     var cl = R.closureFor(d, z, sc.closures);
-    if (cl) bad.closed.push(rid + ' (' + dayLabel_(d) + (cl.message ? ' · ' + cl.message : '') + ')');
+    // 2026-11-17: 오늘 날짜 '예약 마감'은 새 신청만 막는 것 — 이미 잡힌 오늘 예약은 그대로 수거하므로 경고하지 않음
+    if (cl && d > today) bad.closed.push(rid + ' (' + dayLabel_(d) + (cl.message ? ' · ' + cl.message : '') + ')');
     if (String(r[cSync]) !== '완료') {
       var why = !ledgerIdFor_(d) ? d.slice(0, 4) + '년 장부가 아직 연결 안 됨'
         : '장부에 ' + (+d.slice(5, 7)) + '월 시트가 없거나 잠시 못 열었음 (10분마다 다시 시도)';
