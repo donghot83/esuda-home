@@ -8,7 +8,7 @@
   var API = isLocal ? '/api' : CFG.apiUrl;
   var $ = function (id) { return document.getElementById(id); };
   var KEY_STORE = 'esuda_weigh_key';
-  var st = { key: '', date: '', items: [], tab: 'weigh', open: '', pend: {}, busy: false, thumbs: {}, exclCol: false, unit: 250, lossUnit: 200 };
+  var st = { key: '', date: '', items: [], tab: 'weigh', open: '', up: {}, seq: {}, busy: false, thumbs: {}, exclCol: false, unit: 250, lossUnit: 200 };
 
   function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
   function save(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
@@ -24,27 +24,62 @@
 
   function showKey(err) { $('keyView').hidden = false; $('listView').hidden = true; $('btnRefresh').hidden = true; $('keyErr').textContent = err || ''; $('keyInput').value = ''; }
 
-  function fetchList(date) {
-    st.busy = true; $('msg').textContent = '불러오는 중…';
-    post({ action: 'weighList', key: st.key, date: date || '' }).then(function (r) {
+  /* 2026-11-17 속도: 본 날짜는 이 화면(메모리)에 기억 → 바로 보여 주고 뒤에서 최신으로. 앞뒤 날짜는 미리 받아 둠 */
+  var mem = {}, reqSeq = 0;
+  function show(r) {
+    $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
+    if (r.date !== st.date) { st.open = ''; st.thumbs = {}; }
+    st.date = r.date; st.items = r.items; st.exclCol = !!r.exclCol; st.unit = r.unit || 250; st.lossUnit = r.lossUnit || 200;
+    $('dayLabel').textContent = r.label;
+    $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거가 없어요.');
+    render();
+  }
+  function prefetch(date) {
+    [-1, 1].forEach(function (k) {
+      var d = addDays(date, k);
+      if (mem[d]) return;
+      post({ action: 'weighList', key: st.key, date: d }).then(function (r) { if (r && r.ok && !mem[r.date]) mem[r.date] = r; }).catch(function () {});
+    });
+  }
+  function revalidate(date, my) {
+    post({ action: 'weighList', key: st.key, date: date, fresh: true }).then(function (r) {
+      if (!r || !r.ok) return;
+      var old = mem[date]; mem[date] = r;
+      if (my !== reqSeq || st.date !== date || st.open) return;   // 입력 중이면 화면은 그대로
+      if (old && JSON.stringify(old.items) === JSON.stringify(r.items) && old.exclCol === r.exclCol) return;
+      show(r);
+    }).catch(function () {});
+  }
+  function fetchList(date, fresh) {
+    var my = ++reqSeq;
+    if (date && mem[date] && !fresh) { show(mem[date]); $('msg').textContent = ''; }
+    else $('msg').textContent = '불러오는 중…';
+    st.busy = true;
+    post({ action: 'weighList', key: st.key, date: date || '', fresh: !!fresh }).then(function (r) {
+      if (my !== reqSeq) return;
       st.busy = false;
       if (!r.ok) {
         if (r.error === 'forbidden') { save(KEY_STORE, ''); st.key = ''; showKey('코드가 맞지 않아요. 대표님께 계량 화면 코드를 받아 주세요.'); return; }
         $('msg').textContent = '목록을 못 불러왔어요. 새로고침해 주세요.'; return;
       }
-      $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
-      if (r.date !== st.date) { st.open = ''; st.pend = {}; st.thumbs = {}; }
-      st.date = r.date; st.items = r.items; st.exclCol = !!r.exclCol; st.unit = r.unit || 250; st.lossUnit = r.lossUnit || 200;
-      $('dayLabel').textContent = r.label;
-      $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거가 없어요.');
-      render();
-    }).catch(function () { st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });
+      mem[r.date] = r;
+      if (!(st.open && st.date === r.date)) show(r);
+      prefetch(r.date);
+      if (r.cached) revalidate(r.date, my);
+    }).catch(function () { if (my !== reqSeq) return; st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });
   }
 
   function live() { return st.items.filter(function (x) { return !x.cancelled; }); }
   function lossTargets() { return live().filter(function (x) { return !x.free && (x.weighed || x.ledgerWeight > 0); }); }   // 무상 희망은 로스 없음
 
   function render() {
+    var keep = {};   // 다시 그려도 입력하던 값은 그대로
+    ['inBags', 'inW', 'inL', 'inX'].forEach(function (k) { var el = $(k); if (el) keep[k] = el.value; });
+    renderInner();
+    Object.keys(keep).forEach(function (k) { var el = $(k); if (el) el.value = keep[k]; });
+    if (st.tab === 'loss') calcPreview();
+  }
+  function renderInner() {
     var L = live(), w = L.filter(function (x) { return x.weighed; }).length, lt = lossTargets(), ld = lt.filter(function (x) { return x.lossDone; }).length;
     $('cntWeigh').textContent = w + '/' + L.length;
     $('cntLoss').textContent = ld + '/' + lt.length;
@@ -60,10 +95,15 @@
 
   function thumbsHtml(it, kind) {
     var have = (st.thumbs[it.id] || []).filter(function (p) { return p.kind === kind; });
-    var pend = (st.pend[it.id + '|' + kind] || []);
+    var ups = (st.up[it.id + '|' + kind] || []);
+    var lab = { up: '올리는 중…', ok: '✓ 저장됨', fail: '실패 · 다시' };
     return '<div class="wg-pics">' +
       have.map(function (p) { return '<div class="wg-pic"><span class="k">' + esc(p.kind) + '</span>' + (p.data ? '<img alt="" src="data:image/jpeg;base64,' + p.data + '">' : '') + '<button type="button" class="x" data-del="' + esc(p.fileId) + '" aria-label="사진 지우기">✕</button></div>'; }).join('') +
-      pend.map(function (d, i) { return '<div class="wg-pic new"><span class="k">새 사진</span><img alt="" src="' + d + '"><button type="button" class="x" data-unpick="' + kind + '|' + i + '" aria-label="빼기">✕</button></div>'; }).join('') +
+      ups.map(function (u, i) {
+        return '<div class="wg-pic new ' + u.state + '"><span class="k">' + lab[u.state] + '</span><img alt="" src="' + u.data + '">' +
+          (u.state === 'up' ? '' : '<button type="button" class="x" data-unpick="' + kind + '|' + i + '" aria-label="빼기">✕</button>') +
+          (u.state === 'fail' ? '<button type="button" class="retry" data-retry="' + kind + '|' + i + '">다시 올리기</button>' : '') + '</div>';
+      }).join('') +
       '</div>';
   }
 
@@ -122,11 +162,11 @@
   function shrink(file) {
     return new Promise(function (ok, bad) {
       var url = URL.createObjectURL(file), img = new Image();
-      img.onload = function () {
-        var k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+      img.onload = function () {   // 2026-11-17: 1024px·0.7 로 줄여 올리기 빠르게 (무게 숫자는 충분히 보임)
+        var k = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
         c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.75));
+        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.7));
       };
       img.onerror = function () { URL.revokeObjectURL(url); bad(new Error('img')); };
       img.src = url;
@@ -135,12 +175,36 @@
   fileIn.addEventListener('change', function () {
     var p = picking, files = Array.prototype.slice.call(fileIn.files || []).slice(0, 6); picking = null; fileIn.value = '';
     if (!p || !files.length) return;
-    var key = p.id + '|' + p.kind;
+    var key = p.id + '|' + p.kind, it = st.items.filter(function (x) { return x.id === p.id; })[0];
+    if (!it) return;
     Promise.all(files.map(function (f) { return shrink(f).catch(function () { return ''; }); })).then(function (arr) {
-      st.pend[key] = (st.pend[key] || []).concat(arr.filter(Boolean)).slice(0, 6);
+      if (st.seq[key] == null) st.seq[key] = it.photos[p.kind] || 0;
+      st.up[key] = (st.up[key] || []).concat(arr.filter(Boolean).map(function (d) { return { data: d, state: 'up', seq: ++st.seq[key] }; }));
       render();
+      pump(it, p.kind);   // 고르는 즉시 올리기 시작 — 무게를 넣는 동안 올라감
     });
   });
+
+  /* 사진 올리기: 한 번에 3장까지 동시에, 끝나면 다음 것 */
+  var running = 0, MAXRUN = 3, waiters = [];
+  function pending() { return Object.keys(st.up).reduce(function (n, k) { return n + st.up[k].filter(function (u) { return u.state === 'up'; }).length; }, 0); }
+  function pump(it, kind) {
+    var key = it.id + '|' + kind;
+    (st.up[key] || []).forEach(function (u) {
+      if (u.state !== 'up' || u.sending || running >= MAXRUN) return;
+      u.sending = true; running++;
+      post({ action: 'weighPhoto', key: st.key, date: st.date, id: it.id, kind: kind, name: it.name, no: it.no, bags: it.bags, seq: u.seq, data: u.data }).then(function (r) {
+        if (r && r.ok) { u.state = 'ok'; u.fileId = r.fileId; it.photos[kind] = Math.max(it.photos[kind] || 0, r.count); }
+        else u.state = r && r.error === 'free' ? 'fail' : 'fail';
+      }).catch(function () { u.state = 'fail'; }).then(function () {
+        u.sending = false; running--;
+        render(); pump(it, kind);
+        if (!pending()) { var w = waiters; waiters = []; w.forEach(function (f) { f(); }); }
+      });
+    });
+  }
+  function waitUploads() { return pending() ? new Promise(function (ok) { waiters.push(ok); }) : Promise.resolve(); }
+  function failsOf(it, kind) { return (st.up[it.id + '|' + kind] || []).filter(function (u) { return u.state === 'fail'; }).length; }
 
   /* 로스 탭: 입력하는 동안 최종 무게·예상 금액 (장부 수식과 같은 계산) */
   function calcPreview() {
@@ -156,18 +220,15 @@
   function setMsg(t, warn) { var el = $('edMsg'); if (el) { el.textContent = t; el.className = 'wg-note' + (warn ? ' warn' : ''); } }
   function disableEd(on) { Array.prototype.forEach.call(document.querySelectorAll('.wg-ed button, .wg-ed input'), function (b) { b.disabled = on; }); }
 
-  function uploadPend(it, kind) {
-    var key = it.id + '|' + kind, list = (st.pend[key] || []).slice(), i = 0, fail = 0;
-    return new Promise(function (done) {
-      (function next() {
-        if (i >= list.length) { st.pend[key] = []; return done(fail); }
-        setMsg('사진 올리는 중… ' + (i + 1) + '/' + list.length);
-        post({ action: 'weighPhoto', key: st.key, date: st.date, id: it.id, kind: kind, name: it.name, no: it.no, data: list[i] }).then(function (r) {
-          if (r && r.ok) { it.photos[kind] = r.count; if (st.thumbs[it.id]) st.thumbs[it.id].push({ fileId: r.fileId, kind: kind, data: list[i].replace(/^data:image\/\w+;base64,/, '') }); }
-          else fail++;
-          i++; next();
-        }).catch(function () { fail++; i++; next(); });
-      })();
+  function afterSave(it, kind, okMsg, needPhoto) {
+    var n = pending();
+    if (n) setMsg('저장했어요. 사진 올리는 중… (' + n + '장 남음)');
+    return waitUploads().then(function () {
+      disableEd(false);
+      var fail = failsOf(it, kind);
+      if (fail) { render(); setMsg(okMsg + ' 사진 ' + fail + '장을 못 올렸어요 — 사진의 「다시 올리기」를 눌러 주세요.', true); return; }
+      if (needPhoto && !it.photos[kind]) { render(); setMsg(okMsg + ' ' + kind + ' 사진도 골라 주세요.', true); return; }
+      st.open = ''; render();
     });
   }
 
@@ -183,12 +244,7 @@
       }
       if (!r.ok) { disableEd(false); setMsg(r.error === 'bad_weight' ? '무게를 확인해 주세요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
       it.weighed = true; it.ledgerWeight = r.weight; it.bags = r.bags;
-      uploadPend(it, '계량').then(function (fail) {
-        disableEd(false);
-        if (fail) { render(); setMsg('무게는 저장했어요. 사진 ' + fail + '장을 못 올렸어요 — 다시 골라 저장해 주세요.', true); return; }
-        if (!it.photos.계량 && !it.free) { render(); setMsg('무게 저장 ✓  계량 사진도 골라 주세요.', true); return; }
-        st.open = ''; render();
-      });
+      afterSave(it, '계량', '무게 저장 ✓', !it.free);
     }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
   }
 
@@ -206,12 +262,7 @@
       }
       if (!r.ok) { disableEd(false); setMsg(r.error === 'loss_over' ? '제외+로스가 무게보다 커요. 확인해 주세요.' : r.error === 'no_excl_col' ? '장부에 무상제외 칸이 아직 없어요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
       it.lossDone = true; it.loss = r.loss; it.ledgerLoss = r.loss > 0 ? r.loss : ''; it.ledgerExcl = r.excl > 0 ? r.excl : '';
-      uploadPend(it, '로스').then(function (fail) {
-        disableEd(false);
-        if (fail) { render(); setMsg('로스는 저장했어요. 사진 ' + fail + '장을 못 올렸어요 — 다시 골라 저장해 주세요.', true); return; }
-        if (r.loss > 0 && !it.photos.로스) { render(); setMsg('로스 저장 ✓  로스 사진도 골라 주세요.', true); return; }
-        st.open = ''; render();
-      });
+      afterSave(it, '로스', '로스 저장 ✓', r.loss > 0);
     }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
   }
 
@@ -221,10 +272,24 @@
     if (e.target.closest('[data-open]')) { st.open = st.open === id ? '' : id; render(); var el = document.querySelector('.wg-item[data-id="' + CSS.escape(id) + '"]'); if (el && st.open) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     var b;
     if ((b = e.target.closest('[data-pick]'))) { picking = { id: id, kind: b.getAttribute('data-pick') }; fileIn.click(); return; }   // 누른 순간 열어야 함(아이폰)
-    if ((b = e.target.closest('[data-unpick]'))) { var p = b.getAttribute('data-unpick').split('|'); (st.pend[id + '|' + p[0]] || []).splice(+p[1], 1); render(); return; }
+    if ((b = e.target.closest('[data-unpick]'))) {
+      var p = b.getAttribute('data-unpick').split('|'), arr = st.up[id + '|' + p[0]] || [], u = arr[+p[1]];
+      if (!u) return;
+      if (u.state === 'ok') {
+        if (!confirm('이미 저장된 사진이에요. 지울까요?')) return;
+        post({ action: 'weighPhotoDel', key: st.key, fileId: u.fileId }).then(function (r) { if (r && r.ok) { arr.splice(arr.indexOf(u), 1); it.photos[p[0]] = Math.max(0, (it.photos[p[0]] || 1) - 1); render(); } else alert('지우지 못했어요.'); });
+        return;
+      }
+      arr.splice(+p[1], 1); render(); return;
+    }
+    if ((b = e.target.closest('[data-retry]'))) { var q = b.getAttribute('data-retry').split('|'), uu = (st.up[id + '|' + q[0]] || [])[+q[1]]; if (uu) { uu.state = 'up'; render(); pump(it, q[0]); } return; }
     if (e.target.closest('[data-thumbs]')) {
       setMsg('사진 불러오는 중…');
-      post({ action: 'weighThumbs', key: st.key, date: st.date, id: id }).then(function (r) { st.thumbs[id] = (r && r.photos) || []; render(); }).catch(function () { setMsg('사진을 못 불러왔어요.', true); });
+      post({ action: 'weighThumbs', key: st.key, date: st.date, id: id }).then(function (r) {
+        st.thumbs[id] = (r && r.photos) || [];
+        ['계량', '로스'].forEach(function (k) { var a = st.up[id + '|' + k]; if (a) st.up[id + '|' + k] = a.filter(function (u) { return u.state !== 'ok'; }); });
+        render();
+      }).catch(function () { setMsg('사진을 못 불러왔어요.', true); });
       return;
     }
     if ((b = e.target.closest('[data-del]'))) {
@@ -251,7 +316,7 @@
   });
   $('btnPrev').addEventListener('click', function () { fetchList(addDays(st.date, -1)); });
   $('btnNext').addEventListener('click', function () { fetchList(addDays(st.date, 1)); });
-  $('btnRefresh').addEventListener('click', function () { fetchList(st.date); });
+  $('btnRefresh').addEventListener('click', function () { fetchList(st.date, true); });
   $('btnLogout').addEventListener('click', function () { save(KEY_STORE, ''); st.key = ''; showKey(''); });
   $('btnKey').addEventListener('click', function () {
     var k = $('keyInput').value.replace(/\s+/g, '').toUpperCase();
@@ -260,7 +325,7 @@
   });
   $('keyInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('btnKey').click(); });
   window.addEventListener('beforeunload', function (e) {
-    var any = Object.keys(st.pend).some(function (k) { return st.pend[k] && st.pend[k].length; });
+    var any = pending() > 0;
     if (any) { e.preventDefault(); e.returnValue = ''; }
   });
 

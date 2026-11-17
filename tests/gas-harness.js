@@ -118,7 +118,7 @@ function createEnv(opts = {}) {
     },
     LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }),
       getDocumentLock: () => ({ tryLock: () => (docLocked ? false : (docLocked = true)), releaseLock: () => { docLocked = false; } }) },
-    CacheService: { getScriptCache: () => ({ get: k => (cache[k] == null ? null : cache[k]), put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
+    CacheService: { getScriptCache: () => ({ get: k => (cache[k] == null ? null : cache[k]), put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; }, removeAll: ks => { ks.forEach(k => { delete cache[k]; }); } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     DriveApp: {
       getFolderById: id => { const f = drive.folders[id]; if (!f) throw new Error('no folder'); return f; },

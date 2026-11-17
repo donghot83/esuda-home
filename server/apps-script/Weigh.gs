@@ -104,6 +104,14 @@ function sameKg_(a, b) { return Math.abs(+a - +b) < 0.001; }
 function weighList_(b) {
   if (!checkWeighKey_(b.key)) return { ok: false, error: 'forbidden' };
   var R = rules_(), date = R.parseYmd(String(b.date || '')) ? String(b.date) : R.addDays(R.todayKST(new Date()), -1);
+  // 2026-11-17 속도: 만든 목록을 30분 보관 → 화면이 먼저 보여 주고 뒤에서 fresh 로 최신화. 계량·로스·사진·장부 변경 때 지움(driverCacheClear_)
+  var cache = null; try { cache = CacheService.getScriptCache(); } catch (e) {}
+  if (cache && !b.fresh) { var hit = cache.get('wgh_' + date); if (hit) { try { var o = JSON.parse(hit); o.cached = true; return o; } catch (e) {} } }
+  var out = weighListBuild_(date, R);
+  if (cache) { try { var js = JSON.stringify(out); if (js.length < 95000) cache.put('wgh_' + date, js, 1800); } catch (e) {} }
+  return out;
+}
+function weighListBuild_(date, R) {
   var L = weighLedgerRows_(date), recs = weighRecords_(), pc = {}, free = freeWishSet_();
   var ps = ss_().getSheetByName(SHEET_WEIGH_PHOTO);
   if (ps) ps.getDataRange().getValues().slice(1).forEach(function (r) {
@@ -144,6 +152,7 @@ function weighSave_(b) {
     if (hasCur && !sameKg_(cur, w) && !b.force) return { ok: false, error: 'mismatch', ledger: +cur };
     if (!hasCur || !sameKg_(cur, w)) f.sh.getRange(f.x.row, LEDGER_COL.weight).setValue(w);
     weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '봉지': bags, '무게': w, '계량시각': weighNow_() });
+    driverCacheClear_(date);
     return { ok: true, weight: w, bags: bags, changed: hasCur && !sameKg_(cur, w) };
   } finally { lock.releaseLock(); }
 }
@@ -176,6 +185,7 @@ function lossSave_(b) {
       if (excl > 0) { try { ensureFinalFormula_(f.sh, f.x.row); } catch (e) { logError_('최종 수식', e); } }
     }
     weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '로스': loss, '로스확인': 'Y', '로스시각': weighNow_(), '무상제외': excl });
+    driverCacheClear_(date);
     return { ok: true, loss: loss, excl: excl };
   } finally { lock.releaseLock(); }
 }
@@ -187,15 +197,18 @@ function weighPhoto_(b) {
   var data = String(b.data || '').replace(/^data:image\/\w+;base64,/, '');
   if (!rules_().parseYmd(date) || !id) return { ok: false, error: 'bad_request' };
   if (!data || data.length > PHOTO_MAX_B64) return { ok: false, error: 'too_large' };
-  if (freeWishSet_()[id]) return { ok: false, error: 'free' };   // 무상 희망 고객은 사진 안 올림
+  if (/^ESD-/.test(id) && freeWishSet_()[id]) return { ok: false, error: 'free' };   // 무상 희망 고객은 사진 안 올림 (카톡 예약은 확인 안 해도 됨)
   var have = weighPhotos_(date, id, kind).length;
   if (have >= WEIGH_PHOTO_MAX) return { ok: false, error: 'too_many' };
-  var rec = weighRecords_()[date + '|' + id] || {}, name = String(b.name || rec.name || '').replace(/[\\/:*?"<>|]/g, '').slice(0, 20);
-  var no = String(b.no || rec.no || ''), bags = rec.bags === '' || rec.bags == null ? '' : rec.bags;
+  // 2026-11-17 속도: 이름·번호·봉지는 화면이 보내 줌(없을 때만 기록 읽기), 고객 사진 코드는 알림톡 보낼 때 만듦
+  var rec = b.name && b.no ? {} : (weighRecords_()[date + '|' + id] || {});
+  var name = String(b.name || rec.name || '').replace(/[\\/:*?"<>|]/g, '').slice(0, 20);
+  var no = String(b.no || rec.no || ''), bags = b.bags !== '' && b.bags != null ? b.bags : (rec.bags === '' || rec.bags == null ? '' : rec.bags);
+  var seq = +b.seq > 0 ? +b.seq : have + 1;   // 여러 장을 동시에 올려도 번호가 안 겹치게
   var label = (no ? no + (bags !== '' ? '-' + bags : '') + ' ' : '') + name;
-  var file = weighFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', date + ' ' + label + ' ' + kind + (have + 1) + '.jpg'));
+  var file = weighFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', date + ' ' + label + ' ' + kind + seq + '.jpg'));
   sheet_(SHEET_WEIGH_PHOTO, WEIGH_PHOTO_HEADERS).appendRow([date, id, name, kind, file.getId(), weighNow_()]);
-  if (/^ESD-/.test(id)) { try { pickPhotoCode_(id, true); } catch (e) { logError_('계량사진 코드', e); } }
+  driverCacheClear_(date);
   return { ok: true, count: have + 1, fileId: file.getId() };
 }
 
@@ -208,6 +221,7 @@ function weighPhotoDel_(b) {
   for (var i = v.length - 1; i >= 1; i--) if (String(v[i][4]) === fid) {
     try { DriveApp.getFileById(fid).setTrashed(true); } catch (e) {}
     sh.deleteRow(i + 1);
+    driverCacheClear_(v[i][0]);
     return { ok: true };
   }
   return { ok: false, error: 'not_found' };

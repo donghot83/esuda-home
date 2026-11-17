@@ -75,7 +75,7 @@ test('사진: 계량·로스 따로 저장(드라이브 이름 = 날짜 번호-�
   assert.strictEqual(q(e, { action: 'weighPhotoDel', fileId: p1.fileId }).ok, true);
   assert.strictEqual(q(e, { action: 'weighThumbs', id }).photos.length, 2);
   q(e, { action: 'lossSave', id, loss: 2 });
-  const code = e.ctx.pickPhotoCode_(id, false);
+  const code = e.ctx.pickPhotoCode_(id, true);   // 실제로는 입금 예정 알림톡 보낼 때 만들어짐
   const pg = e.post({ action: 'pickupPhoto', code });
   assert.strictEqual(pg.weigh.length, 1); assert.strictEqual(pg.loss.length, 1); assert.strictEqual(pg.lossKg, 2);
   assert.ok(!/계량고객|010/.test(JSON.stringify(pg)));

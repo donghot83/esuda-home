@@ -41,3 +41,9 @@
 .wg-calc{margin-top:10px;font-size:15px;background:#f1f8ee;border-radius:10px;padding:8px 10px}
 .wg-calc:empty{display:none}
 .wg-calc .warn{color:var(--warn);font-weight:700}
+.wg-pic.up img{opacity:.55}
+.wg-pic.up .k{background:rgba(11,78,162,.85)}
+.wg-pic.ok .k{background:rgba(31,125,58,.9)}
+.wg-pic.fail{outline-color:var(--err)}
+.wg-pic.fail .k{background:rgba(217,45,32,.9)}
+.wg-pic .retry{position:absolute;left:3px;right:3px;bottom:3px;height:22px;border:0;border-radius:6px;background:#fff;color:var(--err);font-size:11px;font-weight:800}
