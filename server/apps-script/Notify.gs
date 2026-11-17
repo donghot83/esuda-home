@@ -136,8 +136,9 @@ function ready_(b) {
   var rid = String(b && b.reservationId || '').toUpperCase().trim();
   if (/^\d{4}-[A-Z0-9]{4}$/.test(rid)) rid = resolveRid_(rid) || rid;   // 2026-11-17: 알림톡 버튼이 짧은 번호(1118-4829)로 옴
   if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid)) return { ok: false, error: /^\d{4}-[A-Z0-9]{4}$/.test(rid) ? 'not_found' : 'bad_id' };
-  var sh = sheet_(SHEET_BOOK, BOOK_HEADERS), hdr = ensureBookHeaders_(sh, ['준비완료']);
-  var data = sh.getDataRange().getValues(), cId = hdr.indexOf('예약번호'), cSt = hdr.indexOf('확정상태'), cR = hdr.indexOf('준비완료'), cD = hdr.indexOf('수거일');
+  var sh = sheet_(SHEET_BOOK, BOOK_HEADERS), data = sh.getDataRange().getValues(), hdr = data[0] || [];   // 2026-11-17 속도: 한 번만 읽기
+  if (hdr.indexOf('준비완료') < 0) { hdr = ensureBookHeaders_(sh, ['준비완료']); data = sh.getDataRange().getValues(); }
+  var cId = hdr.indexOf('예약번호'), cSt = hdr.indexOf('확정상태'), cR = hdr.indexOf('준비완료'), cD = hdr.indexOf('수거일');
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][cId]) !== rid) continue;
     if (String(data[i][cSt]) !== '확정') return { ok: false, error: 'not_active' };
