@@ -34,10 +34,9 @@ function inMetro_(lat, lng) { return lat > 37.35 && lat < 37.80 && lng > 126.60 
 var GEO_MEMO_ = null;
 function geocode_(query, area) {
   query = String(query || '').replace(/\s+/g, ' ').trim();
-  var sh = sheet_(SHEET_GEO, ['주소', '위도', '경도', '출처', '시각']);
   if (!GEO_MEMO_) {
     GEO_MEMO_ = {};
-    sh.getDataRange().getValues().slice(1).forEach(function (r) { if (+r[1] && !GEO_MEMO_[String(r[0])]) GEO_MEMO_[String(r[0])] = { lat: +r[1], lng: +r[2], src: String(r[3]) }; });
+    sheet_(SHEET_GEO, ['주소', '위도', '경도', '출처', '시각']).getDataRange().getValues().slice(1).forEach(function (r) { if (+r[1] && !GEO_MEMO_[String(r[0])]) GEO_MEMO_[String(r[0])] = { lat: +r[1], lng: +r[2], src: String(r[3]) }; });
   }
   if (GEO_MEMO_[query]) return GEO_MEMO_[query];
   var out = null;
@@ -50,7 +49,7 @@ function geocode_(query, area) {
   } catch (e) { logError_('좌표 찾기', e); }
   if (!out) { var gu = guCenter_(query, area); if (gu) out = { lat: gu[0], lng: gu[1], src: '구청' }; } // 못 찾은 곳도 저장 → 매번 지도 검색 안 함
   if (!out) return { lat: 0, lng: 0, src: '' };
-  sh.appendRow([query, out.lat, out.lng, out.src, Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm')]);
+  sheet_(SHEET_GEO, ['주소', '위도', '경도', '출처', '시각']).appendRow([query, out.lat, out.lng, out.src, Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm')]);
   GEO_MEMO_[query] = out;
   return out;
 }
