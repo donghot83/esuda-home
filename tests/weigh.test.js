@@ -154,3 +154,35 @@ test('2026-11-17 무상 희망 고객: 목록에 표시, 사진 업로드 거절
   assert.ok(!r.skipped.some(s => /로스 미정/.test(s.이유)));
   assert.ok(e.fetches.some(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE'));
 });
+
+test('2026-11-17 세 경우: 15kg 미만은 로스 없이 이체(무상 계근 사진 알림톡), 무상 희망은 사진 없는 완료 알림톡, 유상은 매입 정산 알림톡', () => {
+  const P = Object.assign({}, READY, { TPL_SETTLE: 'KA01TPSETTLE', TPL_FREE_UNDER: 'KA01TPUNDER', TPL_FREE_WISH: 'KA01TPWISH' });
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const under = e0.post(sub({ date: '2026-11-16', name: '적은고객', phone: '010-1111-0001' }));
+  const paid = e0.post(sub({ date: '2026-11-16', name: '매입고객', phone: '010-1111-0002' }));
+  const wish = e0.post(sub({ date: '2026-11-16', name: '희망고객', phone: '010-1111-0003', noPay: true, bank: '', account: '', holder: '', amount: R.AMOUNTS[0] }));
+  const e = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD] }, props: P });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  q(e, { action: 'weighSave', id: under.reservationId, bags: 1, weight: 9 });
+  q(e, { action: 'weighPhoto', id: under.reservationId, kind: '계량', data: IMG });
+  q(e, { action: 'weighSave', id: paid.reservationId, bags: 3, weight: 40 });
+  q(e, { action: 'weighPhoto', id: paid.reservationId, kind: '계량', data: IMG });
+  q(e, { action: 'lossSave', id: paid.reservationId, loss: 2 });
+  q(e, { action: 'weighSave', id: wish.reservationId, bags: 1, weight: 20 });
+  rowOf(L, paid.reservationId)[8] = 38 * 250 - 2 * 200;
+  rowOf(L, under.reservationId)[8] = '무상수거';
+  assert.ok(!e.ctx.settleReview_(['2026-11-16']).find(x => x['이름'] === '적은고객')['경고'].includes('로스 미정'));
+  const r = e.ctx.makeTransferFile();
+  assert.strictEqual(r.count, 1); assert.strictEqual(r.free, 2);
+  assert.ok(!r.skipped.some(s => /로스 미정/.test(s.이유)), JSON.stringify(r.skipped));
+  const by = id => e.fetches.map(f => f.body.messages[0]).filter(m => m.kakaoOptions.templateId === id);
+  const s = by('KA01TPSETTLE'); assert.strictEqual(s.length, 1);
+  assert.deepStrictEqual([s[0].kakaoOptions.variables['#{정산중량}'], s[0].kakaoOptions.variables['#{매입단가}'], s[0].kakaoOptions.variables['#{로스}'], s[0].kakaoOptions.variables['#{로스금액}'], s[0].kakaoOptions.variables['#{매입금액}']], ['38', '250', '2', '400', '9,100']);
+  const u = by('KA01TPUNDER'); assert.strictEqual(u.length, 1); assert.strictEqual(u[0].kakaoOptions.variables['#{수거중량}'], '9');
+  assert.match(u[0].kakaoOptions.variables['#{사진코드}'], /^[a-z0-9]{12}$/);
+  assert.strictEqual(by('KA01TPWISH').length, 1);
+  assert.strictEqual(by('KA01TPFREE').length, 0);
+  const pg = e.post({ action: 'pickupPhoto', code: u[0].kakaoOptions.variables['#{사진코드}'] });
+  assert.strictEqual(pg.free, true); assert.strictEqual(pg.weigh.length, 1); assert.strictEqual(pg.loss.length, 0);
+});

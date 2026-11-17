@@ -231,12 +231,13 @@ function pickupPhoto_(b) {
     // 2026-11-17: 센터 계량 사진·로스 사진 (입금 예정 알림톡 [계량 사진 보기])
     var lossKg = '';
     if (typeof weighPhotos_ === 'function') {
-      weighPhotos_(null, rid).forEach(function (p) { var arr = p.kind === '로스' ? loss : weigh; if (arr.length < 4) { var d = b64(p.fileId); if (d) arr.push(d); } });
       var rec = weighRecords_()[fmtDate_(bk.data[i][bk.col('수거일')]) + '|' + rid];
-      if (rec && rec.lossDone && +rec.loss > 0) lossKg = +rec.loss;
-      var exclKg = rec && rec.lossDone && +rec.excl > 0 ? +rec.excl : '';
+      var isFree = !!(rec && rec.at && (+rec.weight || 0) - (+rec.excl || 0) - (+rec.loss || 0) < FREE_UNDER_KG);   // 무상수거면 계근 사진만
+      weighPhotos_(null, rid).forEach(function (p) { if (isFree && p.kind === '로스') return; var arr = p.kind === '로스' ? loss : weigh; if (arr.length < 4) { var d = b64(p.fileId); if (d) arr.push(d); } });
+      if (!isFree && rec && rec.lossDone && +rec.loss > 0) lossKg = +rec.loss;
+      var exclKg = !isFree && rec && rec.lossDone && +rec.excl > 0 ? +rec.excl : '';
     }
-    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos, weigh: weigh, loss: loss, lossKg: lossKg, exclKg: exclKg || '', lossUnit: lossUnitPrice_() };
+    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos, weigh: weigh, loss: loss, lossKg: lossKg, exclKg: exclKg || '', lossUnit: lossUnitPrice_(), free: !!isFree };
   }
   return { ok: false, error: 'not_found' };
 }

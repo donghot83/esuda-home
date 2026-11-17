@@ -58,8 +58,8 @@ p.sm{font-size:13px;text-align:left;margin:0 0 4px}
         // 2026-11-17: 센터 계량 사진·로스 사진이 있으면 그것부터 (입금 예정 알림톡 [계량 사진 보기])
         var weigh = (r && r.weigh) || [], loss = (r && r.loss) || [], pick = (r && r.photos) || [];
         if (r && r.ok && (weigh.length || loss.length)) {
-          return sections((r.date ? r.date + ' 수거분 ' : '') + '센터 계량 사진',
-            '센터에서 무게를 잰 사진이에요. 입금 예정 금액은 이 무게로 계산했어요.',
+          return sections((r.date ? r.date + ' 수거분 ' : '') + (r.free ? '센터 계근 사진' : '센터 계량 사진'),
+            r.free ? '센터에서 무게를 잰 사진이에요. 15kg 미만으로 무상수거 처리되었어요.' : '센터에서 무게를 잰 사진이에요. 매입 금액은 이 무게로 계산했어요.',
             [['⚖️ 계량 사진', '', weigh],
              ['🚫 로스·제외 사진', [r.lossKg ? '로스(폐기물) ' + r.lossKg + 'kg — 무게에서 빼고 1kg당 ' + (r.lossUnit || 200) + '원 처리비 공제' : '', r.exclKg ? '무상제외 ' + r.exclKg + 'kg — 박스·이불 등 매입하지 않는 물품, 무게에서만 제외' : ''].filter(Boolean).join('<br>') || '매입에서 제외된 물품', loss],
              ['🚚 수거 사진', '기사님이 수거하면서 찍은 사진', pick]]);

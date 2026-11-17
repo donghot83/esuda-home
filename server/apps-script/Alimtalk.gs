@@ -23,7 +23,11 @@ var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picke
   paid: { prop: 'TPL_PAID', label: '입금 예정' }, free: { prop: 'TPL_FREE', label: '무상수거' },
   sameday: { prop: 'TPL_SAMEDAY', label: '당일 안내' },
   pickedPhoto: { prop: 'TPL_PICKED_PHOTO', label: '픽업 완료(사진)', opt: true },
-  paidPhoto: { prop: 'TPL_PAID_PHOTO', label: '입금 예정(사진)', opt: true } }; // 2026-11-17 [계량 사진 보기] 버튼·로스 차감 줄 // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
+  paidPhoto: { prop: 'TPL_PAID_PHOTO', label: '입금 예정(사진)', opt: true }, // 2026-11-17 [계량 사진 보기] 버튼·로스 차감 줄
+  // 2026-11-17 대표 문구: ③ 유상 매입 / ② 15kg 미만 무상(계근 사진) / ① 무상 희망(사진 없음)
+  settle: { prop: 'TPL_SETTLE', label: '매입 정산', opt: true },
+  freeUnder: { prop: 'TPL_FREE_UNDER', label: '무상수거(15kg 미만)', opt: true },
+  freeWish: { prop: 'TPL_FREE_WISH', label: '무상수거(희망)', opt: true } }; // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
 
 function alimConf_() {
   var p = PropertiesService.getScriptProperties();
@@ -108,13 +112,22 @@ function alimPicked_(rid) {
   return sendAlimtalk_('picked', rid, r.get('연락처'), vars);
 }
 
-/** ③ 입금 예정 / ④ 무상수거 — lr = 장부 줄 {weight, loss}, amount = 입금액(0이면 무상) */
-function alimSettled_(rid, lr, amount) {
+/** ③ 입금 예정 / ④ 무상수거 — lr = 장부 줄 {weight, excl, loss}, amount = 입금액(0이면 무상), why = 'wish'(무상 희망)
+ *  2026-11-17: 유상 매입 → TPL_SETTLE([계량 사진 보기]) / 15kg 미만 무상 → TPL_FREE_UNDER([계근 사진 보기]) / 무상 희망 → TPL_FREE_WISH(사진 없음)
+ *  새 템플릿이 아직 없거나 계량 사진이 없으면 예전 템플릿으로 */
+function alimSettled_(rid, lr, amount, why) {
   var r = bookRowByRid_(rid);
   if (!r) return { ok: false, skipped: 'no_booking' };
-  var w = (+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0);   // 정산 중량 = 무게 - 무상제외 - 로스
+  var w = Math.round(((+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0)) * 100) / 100;   // 정산 중량 = 무게 - 무상제외 - 로스
+  var c = alimConf_(), hasPhoto = typeof weighPhotos_ === 'function' && weighPhotos_(null, rid, '계량').length > 0;
   if (amount > 0) {
-    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid)) return { ok: true, skipped: 'already' };
+    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid) || alimSent_('settle', rid)) return { ok: true, skipped: 'already' };
+    if (c.tpl('settle') && hasPhoto) {
+      var lu = lossUnitPrice_(), loss = +lr.loss || 0;
+      return sendAlimtalk_('settle', rid, r.get('연락처'), { '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
+        '#{로스}': String(loss), '#{로스금액}': Number(loss * lu).toLocaleString('ko-KR'), '#{매입금액}': Number(amount).toLocaleString('ko-KR'),
+        '#{사진코드}': pickPhotoCode_(rid, true) });
+    }
     var vars = { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
       '#{무게}': String(w), '#{단가}': String(transferUnitPrice_()), '#{금액}': Number(amount).toLocaleString('ko-KR'),
       '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) };
@@ -125,6 +138,9 @@ function alimSettled_(rid, lr, amount) {
     }
     return sendAlimtalk_('paid', rid, r.get('연락처'), vars);
   }
+  if (alimSent_('free', rid) || alimSent_('freeUnder', rid) || alimSent_('freeWish', rid)) return { ok: true, skipped: 'already' };
+  if (why === 'wish' && c.tpl('freeWish')) return sendAlimtalk_('freeWish', rid, r.get('연락처'), {});   // 문구에 변수 없음
+  if (why !== 'wish' && c.tpl('freeUnder') && hasPhoto) return sendAlimtalk_('freeUnder', rid, r.get('연락처'), { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
   return sendAlimtalk_('free', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{무게}': String(w) });
 }
 

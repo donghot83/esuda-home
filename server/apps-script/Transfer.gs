@@ -135,7 +135,7 @@ function makeTransferFile(opts) {
     marks.forEach(function (m) {
       sh.getRange(m.row, col('지급상태') + 1).setValue(m.state);
       if (m.state === '이체파일생성') sh.getRange(m.row, col('이체파일') + 1).setValue(fileName);
-      if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0); } catch (e) { logError_('알림톡(무상수거)', e); } }
+      if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0, /고객 희망/.test(m.state) ? 'wish' : ''); } catch (e) { logError_('알림톡(무상수거)', e); } }
       // 2026-11-16 대표 결정: 입금 '예정' 안내를 이체 파일 만들 때 먼저 보내고, 송금은 그 뒤에
       if (m.state === '이체파일생성' && m.amount > 0) { try { alimSettled_(m.rid, m.lr, m.amount); } catch (e) { logError_('알림톡(입금 예정)', e); } }
     });

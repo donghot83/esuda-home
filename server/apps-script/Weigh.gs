@@ -238,9 +238,11 @@ function weighThumbs_(b) {
 }
 
 /** 이체 파일용: 계량 화면으로 계량했는데 로스 확인 전이면 true */
+var FREE_UNDER_KG = 15;   // 이 무게 미만이면 무상수거 → 로스 입력 필요 없음 (2026-11-17 대표 결정)
 function weighLossPending_(date, rid) {
   if (freeWishSet_()[rid]) return false;   // 무상 희망은 로스 필요 없음
   var rec = weighRecords_()[date + '|' + rid];
+  if (rec && rec.at && +rec.weight < FREE_UNDER_KG) return false;   // 15kg 미만도 로스 필요 없음
   return !!(rec && rec.at && !rec.lossDone);
 }
 
@@ -267,7 +269,7 @@ function settleReview_(dates) {
         if (rec.at && !sameKg_(rec.weight, w)) warn.push('장부 무게가 계량 화면과 다름');
         if (w > 0 && (+x.excl || 0) + l > w) warn.push('제외+로스가 무게보다 큼');
         if (!p.계량) warn.push('계량 사진 없음');
-        if (rec.at && !rec.lossDone) warn.push('로스 미정');
+        if (rec.at && !rec.lossDone && w >= FREE_UNDER_KG) warn.push('로스 미정');   // 15kg 미만은 로스 필요 없음
         if (l > 0 && !p.로스) warn.push('로스 사진 없음');
       }
       out.push({ '수거일': date, '번호': x.no + (rec.bags !== '' && rec.bags != null ? '-' + rec.bags : ''), '이름': x.name, '구분': x.rid ? (isFree ? '신청페이지(무상 희망)' : '신청페이지') : '카톡·직원',

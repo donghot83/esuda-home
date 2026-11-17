@@ -70,7 +70,7 @@
   }
 
   function live() { return st.items.filter(function (x) { return !x.cancelled; }); }
-  function lossTargets() { return live().filter(function (x) { return !x.free && (x.weighed || x.ledgerWeight > 0); }); }   // 무상 희망은 로스 없음
+  function lossTargets() { return live().filter(function (x) { return !x.free && +x.ledgerWeight >= 15; }); }   // 무상 희망·15kg 미만은 로스 없음
 
   function render() {
     var keep = {};   // 다시 그려도 입력하던 값은 그대로
@@ -86,7 +86,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.wg-tabs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === st.tab); });
     $('help').textContent = st.tab === 'weigh'
       ? '고객을 눌러 봉지 수·무게를 넣고, 갤러리에서 계량 사진을 골라 저장해요. 장부에 적힌 무게와 다르면 한 번 더 물어봐요.'
-      : '로스(폐기물)는 무게에서 빼고 kg당 ' + st.lossUnit + '원 공제, 무상제외(박스·이불 등)는 무게에서만 빼요. 나중에 따로 정해도 되고, 정하기 전에는 그 고객 입금이 이체 파일에서 빠져요.';
+      : '로스(폐기물)는 무게에서 빼고 kg당 ' + st.lossUnit + '원 공제, 무상제외(박스·이불 등)는 무게에서만 빼요. 15kg 미만·무상 희망 고객은 로스가 필요 없어서 여기 안 나와요. 정하기 전에는 그 고객 입금이 이체 파일에서 빠져요.';
     var list = st.tab === 'weigh' ? st.items : lossTargets().slice().sort(function (a, b) { return (a.lossDone - b.lossDone); });
     $('list').innerHTML = list.map(function (it) { return st.tab === 'weigh' ? weighCard(it) : lossCard(it); }).join('') ||
       (st.tab === 'loss' ? '<li class="dv-sub">계량한 고객이 아직 없어요.</li>' : '');
@@ -112,7 +112,8 @@
     if (it.cancelled) return '<li class="wg-item cx"><div class="wg-row"><span class="wg-lab">' + esc(it.no || '?') + '</span><span class="wg-name">' + esc(it.name) + '</span><span class="wg-st">취소</span></div></li>';
     var ok = it.weighed && (it.free || it.photos.계량 > 0);
     var stat = it.weighed ? '<b class="good">' + kg(it.ledgerWeight) + ' ✓</b>' : (it.ledgerWeight !== '' ? '<span>장부 ' + kg(it.ledgerWeight) + '</span>' : '<span class="warn">무게 전</span>');
-    stat += '<br>' + (it.free ? '<span class="free">무상 · 사진 없음</span>' : (it.photos.계량 ? '📷 ' + it.photos.계량 + '장' : '<span class="warn">사진 없음</span>'));
+    stat += '<br>' + (it.free ? '<span class="free">무상 · 사진 없음</span>' : (it.photos.계량 ? '📷 ' + it.photos.계량 + '장' : '<span class="warn">사진 없음</span>')) +
+      (!it.free && it.weighed && +it.ledgerWeight < 15 ? '<br><span class="free">15kg 미만 · 무상 (로스 없음)</span>' : '');
     var html = '<li class="wg-item' + (ok ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + (it.rid ? ' · 신청 ' + esc(it.rid) : ' · 카톡·직원') + '</span>' + (it.free ? ' <span class="wg-free">무상 희망</span>' : '') + '</span><span class="wg-st">' + stat + '</span></button>';
     if (st.open === it.id) {
       var wv = it.weighed ? it.ledgerWeight : (it.ledgerWeight !== '' ? it.ledgerWeight : '');
