@@ -49,10 +49,10 @@ function ledgerRowFor_(lss, dateStr, rid) {
   if (!lss) return null;
   var sh = ledgerMonthSheet_(lss, dateStr);
   if (!sh) return null;
-  var v = sh.getDataRange().getValues();
+  var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
   for (var i = 1; i < v.length; i++) {
-    if (String(v[i][LEDGER_COL.memo - 1] || '').indexOf(rid) >= 0) {
-      return { weight: v[i][5], loss: v[i][6], amount: v[i][8], row: i + 1 };
+    if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) {
+      return { weight: v[i][LC.weight - 1], excl: LC.excl ? v[i][LC.excl - 1] : '', loss: v[i][LC.loss - 1], amount: v[i][LC.amount - 1], row: i + 1 };
     }
   }
   return null;
@@ -64,7 +64,7 @@ function payAmount_(lr, unit) {
   if (!(w > 0)) return { ok: false, reason: '무게 없음' };
   if (typeof lr.amount === 'number' && isFinite(lr.amount)) return { ok: true, amount: Math.round(lr.amount), source: '장부' };
   if (String(lr.amount || '').indexOf('무상') >= 0) return { ok: true, amount: 0, source: '장부' };
-  var loss = +lr.loss || 0, net = w - loss;
+  var loss = +lr.loss || 0, net = w - (+lr.excl || 0) - loss;   // 2026-11-17 무상제외는 무게에서만 뺌
   if (net < 15) return { ok: true, amount: 0, source: '계산' };
   return { ok: true, amount: Math.round(net * unit - loss * lossUnitPrice_()), source: '계산' };
 }
@@ -111,7 +111,7 @@ function makeTransferFile(opts) {
       var rec = { '은행코드': code, '은행명': bank, '계좌번호': acct, '금액': pa.amount, '예금주': holder,
         '입금은행': code, '입금계좌': acct, '고객관리성명': holder, '입금액': pa.amount,
         '출금통장표시': holder.slice(0, 7), '입금통장표시': TRANSFER_SENDER_MEMO.slice(0, 7), '예약번호': rid, '수거일': date,
-        '무게': lr.weight, '로스': lr.loss || '', '금액근거': pa.source, '장부행': lr.row };
+        '무게': lr.weight, '무상제외': lr.excl || '', '로스': lr.loss || '', '금액근거': pa.source, '장부행': lr.row };
       rows.push(TRANSFER_COLUMNS.map(function (h) { return rec[h]; }));
       check.push(rec); total += pa.amount;
       marks.push({ row: i + 1, state: '이체파일생성', rid: rid, lr: lr, amount: pa.amount });
@@ -126,7 +126,7 @@ function makeTransferFile(opts) {
       up.getRange(1, 1, 1, TRANSFER_COLUMNS.length).setValues([TRANSFER_COLUMNS]);
       up.getRange(2, 1, rows.length, TRANSFER_COLUMNS.length).setNumberFormat('@').setValues(rows.map(function (x) { return x.map(String); }));
       var ck = out.insertSheet('확인용');
-      var ch = ['예약번호', '수거일', '예금주', '은행명', '은행코드', '계좌번호', '무게', '로스', '금액', '금액근거', '장부행'];
+      var ch = ['예약번호', '수거일', '예금주', '은행명', '은행코드', '계좌번호', '무게', '무상제외', '로스', '금액', '금액근거', '장부행'];
       ck.getRange(1, 1, 1, ch.length).setValues([ch]);
       ck.getRange(2, 1, check.length, ch.length).setValues(check.map(function (c) { return ch.map(function (h) { return h === '계좌번호' || h === '은행코드' ? "'" + c[h] : c[h]; }); }));
       ck.getRange(check.length + 3, 1, 1, 3).setValues([['합계', check.length + '건', total]]);
@@ -167,6 +167,7 @@ function onOpen() {
       .addItem('예약 찾기 (이름·연락처 뒤4자리·번호)', 'menuFindBooking_')
       .addItem('정산 검토표 만들기 (날짜별 무게·로스·사진)', 'menuSettleReview_')
       .addItem('계량 화면 코드 보기·바꾸기', 'menuWeighKey_')
+      .addItem('장부에 무상제외 칸 추가 (한 번만)', 'menuAddExclColumns_')
       .addItem('예약 취소 (예약번호 또는 날짜 번호)', 'menuCancel_')
       .addItem('동선 짜기 (번호 확정)', 'menuRoute_')
       .addItem('현황판 새로 고침', 'menuDashboard_')

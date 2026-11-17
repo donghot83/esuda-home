@@ -34,6 +34,10 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/javascript' });
     return res.end("window.ESUDA_APPLY = { apiUrl: '', kakaoUrl: 'https://pf.kakao.com/_DxoHVG/chat' };");
   }
+  if (u.pathname === '/api' && u.searchParams.get('action') === 'mockExcl') {   // 로컬: 장부에 무상제외 칸 넣기 시험
+    const r = env.ctx.addExclColumns(); env.ctx.ledgerColsReset_();
+    res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(r));
+  }
   if (u.pathname === '/api' && u.searchParams.get('action') === 'mockSet') {
     MOCK_DELAY = +u.searchParams.get('delay') || 0; MOCK_FAIL = u.searchParams.get('fail') || '';
     res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{"ok":true}');

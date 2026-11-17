@@ -15,20 +15,52 @@
  * 해당 달 시트가 아직 없으면(예: 12월 시트 생성 전) '대기'로 두고, syncLedgerPending()이 나중에 다시 넣는다.
  */
 
-var LEDGER_COL = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, memo: 11 };
-// 2026-11-16: 직원 줄과 같은 계산 — 최종(H)=무게-로스, 금액(I)=최종×단가-로스×로스단가(최종 15kg 미만이면 '무상수거'), 로스금액(J)=로스×로스단가
-var LEDGER_CALC_COL = 8; // H, I, J
+// 번호~무게(A~F)는 위치 고정. 로스·최종·금액·로스금액·메모는 2026-11-17부터 '머리글 이름'으로 찾는다(ledgerCols_) —
+// 무게와 로스 사이에 '무상제외' 칸이 들어간 달(11월~)과 안 들어간 달(10월 이전)을 둘 다 처리.
+var LEDGER_COL = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, memo: 11 };   // memo 는 옛 모양 기본값 — 실제로는 ledgerCols_(sh).memo
+var LEDGER_COLS_CACHE_ = [];
+/** 장부 달 시트의 칸 위치(1부터) {weight, excl(없으면 0), loss, final, amount, lossAmt, memo} — 머리글(1행) 이름으로 */
+function ledgerCols_(sh, v) {
+  for (var k = 0; k < LEDGER_COLS_CACHE_.length; k++) if (LEDGER_COLS_CACHE_[k][0] === sh) return LEDGER_COLS_CACHE_[k][1];
+  var h = ((v || sh.getDataRange().getValues())[0] || []).map(function (x) { return String(x == null ? '' : x).replace(/\s+/g, ''); });
+  var at = function (name) { var i = h.indexOf(name); return i >= 0 ? i + 1 : 0; };
+  var x = at('무상제외') ? 1 : 0;
+  var c = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, excl: x ? 7 : 0,
+    loss: at('로스') || 7 + x, final: at('최종') || 8 + x, amount: at('금액') || 9 + x, lossAmt: at('로스금액') || 10 + x, memo: at('메모') || 11 + x };
+  LEDGER_COLS_CACHE_.push([sh, c]);
+  return c;
+}
+function ledgerColsReset_() { LEDGER_COLS_CACHE_ = []; }
+function colLetter_(n) { var s = ''; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+// 2026-11-16: 직원 줄과 같은 계산 — 최종 = 무게 - 무상제외 - 로스, 금액 = 최종×단가 - 로스×로스단가(최종 15kg 미만이면 '무상수거'), 로스금액 = 로스×로스단가
+// 2026-11-17: 무상제외(박스·이불 등)는 무게에서만 빼고 돈은 공제하지 않음
 function lossUnitPrice_() {
   var v = PropertiesService.getScriptProperties().getProperty('TRANSFER_LOSS_PRICE');
   return v ? +v : 200;
 }
-function ledgerCalcFormulas_(row) {
-  var u = transferUnitPrice_(), lu = lossUnitPrice_(), F = 'F' + row, G = 'G' + row, H = 'H' + row;
-  return [['=IF(' + F + '="","",' + F + '-N(' + G + '))',
-           '=IF(' + F + '="","",IF(' + H + '>=15,' + H + '*' + u + '-N(' + G + ')*' + lu + ',"무상수거"))',
-           '=IF(N(' + G + ')=0,"",' + G + '*' + lu + ')']];
+function ledgerFinalFormula_(row, c) {
+  var F = 'F' + row, L = colLetter_(c.loss) + row, X = c.excl ? colLetter_(c.excl) + row : '';
+  return '=IF(' + F + '="","",' + F + (X ? '-N(' + X + ')' : '') + '-N(' + L + '))';
 }
-function setLedgerCalc_(sh, row) { sh.getRange(row, LEDGER_CALC_COL, 1, 3).setFormulas(ledgerCalcFormulas_(row)); }
+function ledgerCalcFormulas_(row, c) {
+  c = c || { excl: 0, loss: 7, final: 8 };
+  var u = transferUnitPrice_(), lu = lossUnitPrice_(), F = 'F' + row, L = colLetter_(c.loss) + row, H = colLetter_(c.final) + row;
+  return [[ledgerFinalFormula_(row, c),
+           '=IF(' + F + '="","",IF(' + H + '>=15,' + H + '*' + u + '-N(' + L + ')*' + lu + ',"무상수거"))',
+           '=IF(N(' + L + ')=0,"",' + L + '*' + lu + ')']];
+}
+function setLedgerCalc_(sh, row) { var c = ledgerCols_(sh); sh.getRange(row, c.final, 1, 3).setFormulas(ledgerCalcFormulas_(row, c)); }
+/** 무상제외 칸에 값을 넣을 때: 그 줄 최종 수식이 무상제외를 안 빼고 있으면 표준 수식으로 (손으로 만든 다른 수식은 그대로) */
+function ensureFinalFormula_(sh, row) {
+  var c = ledgerCols_(sh);
+  if (!c.excl) return false;
+  var cur = String(sh.getRange(row, c.final).getFormula ? sh.getRange(row, c.final).getFormula() : '').replace(/\$/g, '');
+  var X = colLetter_(c.excl) + row;
+  if (cur && cur.indexOf(X) >= 0) return false;
+  sh.getRange(row, c.final, 1, 1).setFormulas([[ledgerFinalFormula_(row, c)]]);
+  return true;
+}
 
 /** 신청페이지 줄 중 계산 수식이 없는 줄에 수식 채우기 (지난달~두 달 뒤). 직원이 만든 줄은 건드리지 않음 */
 function fillLedgerCalc() {
@@ -38,12 +70,12 @@ function fillLedgerCalc() {
     if (!sh) return;
     var key = d0.slice(0, 4) + sh.getName();
     if (done[key]) return; done[key] = 1;
-    var v = sh.getDataRange().getValues();
-    var f = sh.getRange(1, LEDGER_CALC_COL, v.length, 3).getFormulas();
+    var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
+    var f = sh.getRange(1, LC.final, v.length, 3).getFormulas();
     for (var i = 1; i < v.length; i++) {
-      if (!/^ESD-\d{6}-\w{4} 신청페이지/.test(String(v[i][LEDGER_COL.memo - 1] || ''))) continue;
+      if (!/^ESD-\d{6}-\w{4} 신청페이지/.test(String(v[i][LC.memo - 1] || ''))) continue;
       if ((f[i] || []).join('')) continue;                                       // 이미 수식 있음
-      if ([7, 8, 9].some(function (j) { return v[i][j] !== '' && v[i][j] != null; })) continue; // 직원이 값을 직접 넣음
+      if ([LC.final - 1, LC.amount - 1, LC.lossAmt - 1].some(function (j) { return v[i][j] !== '' && v[i][j] != null; })) continue; // 직원이 값을 직접 넣음
       setLedgerCalc_(sh, i + 1); n++;
     }
   });
@@ -133,11 +165,11 @@ function ledgerAppend_(c, rid) {
   var tz = lss.getSpreadsheetTimeZone() || 'GMT'; // 가져온 파일은 시간대가 비어 있고 실제로는 GMT로 저장됨
   var sh = ledgerMonthSheet_(lss, c.date);
   if (!sh) return { ok: false, reason: 'no_month_sheet' };
-  var v = sh.getDataRange().getValues();
+  var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
   var ym = c.date.slice(0, 7);
   var last = -1, lastDate = '', firstAfter = -1;
   for (var i = 1; i < v.length; i++) {
-    if (String(v[i][LEDGER_COL.memo - 1] || '').indexOf(rid) >= 0) return { ok: true, duplicate: true }; // 이미 들어감
+    if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) return { ok: true, duplicate: true }; // 이미 들어감
     var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
     if (!d || d.slice(0, 7) !== ym) continue;            // 다른 달(아래쪽 월별 요약표 등)은 건너뜀
     if (d <= c.date) { last = i; lastDate = d; }
@@ -155,7 +187,7 @@ function ledgerAppend_(c, rid) {
   }
   var fmt = ledgerDateFormat_(sh, v, tz);
   if (last >= 0) { // 위 줄 서식(글꼴·테두리 등) 따라가기
-    try { sh.getRange(last + 1, 1, 1, LEDGER_COL.memo).copyTo(sh.getRange(at, 1, 1, LEDGER_COL.memo), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false); } catch (e) {}
+    try { sh.getRange(last + 1, 1, 1, LC.memo).copyTo(sh.getRange(at, 1, 1, LC.memo), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false); } catch (e) {}
   }
   var dc = sh.getRange(at, LEDGER_COL.date);
   dc.setValue(c.date); // 'YYYY-MM-DD' 글자 → 시트가 자기 시간대로 그날 날짜로 바꿈(시간대 차이로 하루 밀리지 않음)
@@ -163,7 +195,7 @@ function ledgerAppend_(c, rid) {
   sh.getRange(at, LEDGER_COL.name).setValue(c.name);
   sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
-  sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
+  sh.getRange(at, LC.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
   try { setLedgerCalc_(sh, at); } catch (e) { logError_('장부 수식', e); }
   driverCacheClear_(c.date);
   try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
@@ -207,9 +239,9 @@ function ledgerFind_(dateStr, rid) {
   if (!lss) return null;
   var sh = ledgerMonthSheet_(lss, dateStr);
   if (!sh) return null;
-  var v = sh.getDataRange().getValues();
+  var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
   for (var i = 1; i < v.length; i++) {
-    if (String(v[i][LEDGER_COL.memo - 1] || '').indexOf(rid) >= 0) return { sheet: sh, row: i + 1, weight: v[i][LEDGER_COL.weight - 1], values: v };
+    if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) return { sheet: sh, row: i + 1, weight: v[i][LEDGER_COL.weight - 1], values: v };
   }
   return null;
 }
@@ -220,7 +252,8 @@ function ledgerHasRid_(dateStr, rid) {
   var key = dateStr.slice(0, 7);
   if (!(key in LEDGER_MEMO_CACHE_)) {
     var lss = ledgerOpen_(dateStr), sh = lss && ledgerMonthSheet_(lss, dateStr);
-    LEDGER_MEMO_CACHE_[key] = sh ? sh.getDataRange().getValues().map(function (r) { return String(r[LEDGER_COL.memo - 1] || ''); }).join('|') : null;
+    var vv = sh ? sh.getDataRange().getValues() : null, mc = sh ? ledgerCols_(sh, vv).memo : 0;
+    LEDGER_MEMO_CACHE_[key] = sh ? vv.map(function (r) { return String(r[mc - 1] || ''); }).join('|') : null;
   }
   var t = LEDGER_MEMO_CACHE_[key];
   return t == null ? false : t.indexOf(rid) >= 0;
@@ -237,12 +270,12 @@ function refreshLedgerCounts_() {
     if (!lss) return;
     var sh = ledgerMonthSheet_(lss, ym + '-01');
     if (!sh) return;
-    var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues();
+    var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
     for (var i = 1; i < v.length; i++) {
       var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
       if (!d || d.slice(0, 7) !== ym || d < today) continue;
       if (!String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;
-      if (/^\[취소/.test(String(v[i][LEDGER_COL.memo - 1] || ''))) continue; // 취소 표시 줄은 자리 차지 안 함
+      if (/^\[취소/.test(String(v[i][LC.memo - 1] || ''))) continue; // 취소 표시 줄은 자리 차지 안 함
       out[d] = (out[d] || 0) + 1;
     }
   });
@@ -302,4 +335,51 @@ function syncLedgerPending() {
   // 2026-11-17: 기사님 근무 시간(15시~새벽 4시)엔 오늘·내일 기사님 목록을 미리 만들어 둠 → 화면 열면 바로
   try { if (typeof warmDriverCache_ === 'function') warmDriverCache_(new Date()); } catch (e) { logError_('기사님 목록 미리 만들기', e); }
   return res;
+}
+
+/* ===== 2026-11-17 장부에 '무상제외' 칸 넣기 (메뉴, 한 번만) =====
+ * 11월·12월 매입금액 시트의 무게(F) 오른쪽에 G '무상제외' 칸을 넣는다(로스 이하가 한 칸씩 오른쪽으로).
+ * 구글 시트가 칸을 넣을 때 기존 수식을 자동으로 맞춰 줌 → 최종 수식만 '무게-무상제외-로스'로 바꿈.
+ * 손으로 만든 다른 모양의 최종 수식(예: 금액에 -900)은 건드리지 않고 목록으로 알려 줌. 메모 칸에 '메모' 머리글.
+ */
+function addExclColumn_(ym) {
+  var lss = ledgerOpen_(ym + '-01'), sh = lss && ledgerMonthSheet_(lss, ym + '-01');
+  if (!sh) return { ym: ym, skipped: '시트 없음' };
+  var c0 = ledgerCols_(sh);
+  if (c0.excl) return { ym: ym, skipped: '이미 있음' };
+  sh.insertColumnAfter(LEDGER_COL.weight);
+  sh.getRange(1, LEDGER_COL.weight + 1).setValue('무상제외');
+  ledgerColsReset_();
+  var v = sh.getDataRange().getValues(), c = ledgerCols_(sh, v);
+  if (!String(v[0][c.memo - 1] || '').trim()) { sh.getRange(1, c.memo).setValue('메모'); }
+  ledgerColsReset_(); c = ledgerCols_(sh);
+  var f = sh.getRange(1, c.final, v.length, 1).getFormulas(), changed = 0, odd = [];
+  var Lc = colLetter_(c.loss);
+  for (var i = 1; i < v.length; i++) {
+    var cur = String((f[i] || [''])[0] || '').replace(/\$/g, '').replace(/\s+/g, ''), r = i + 1;
+    if (!cur) continue;
+    // 칸을 넣은 뒤 모양: =F12-H12  또는  =IF(F12="","",F12-N(H12))
+    if (cur === '=F' + r + '-' + Lc + r || cur === '=IF(F' + r + '="","",F' + r + '-N(' + Lc + r + '))') {
+      sh.getRange(r, c.final, 1, 1).setFormulas([[ledgerFinalFormula_(r, c)]]); changed++;
+    } else if (cur.indexOf('G' + r) < 0) odd.push(r + '행');
+  }
+  return { ym: ym, changed: changed, odd: odd };
+}
+function addExclColumns() {
+  var R = rules_(), today = R.todayKST(new Date());
+  var yms = {}; yms[today.slice(0, 7)] = 1; yms[R.addDays(today, 31).slice(0, 7)] = 1;
+  var lock = ledgerLock_();
+  if (!lock.tryLock(20000)) return [{ error: 'busy' }];
+  try { return Object.keys(yms).sort().map(addExclColumn_); }
+  finally { lock.releaseLock(); ledgerColsReset_(); }
+}
+function menuAddExclColumns_() {
+  var ui = SpreadsheetApp.getUi();
+  if (ui.alert('장부에 무상제외 칸 추가', '이번 달·다음 달 매입금액 시트의 무게 오른쪽에 「무상제외」 칸을 넣어요.\n로스·최종·금액·로스금액·메모는 한 칸씩 오른쪽으로 가요.\n\n직원이 장부를 고치고 있지 않을 때 눌러 주세요. 진행할까요?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var r = addExclColumns();
+  ui.alert(r.map(function (x) {
+    if (x.error) return '잠시 뒤 다시 해 주세요 (다른 작업 중)';
+    if (x.skipped) return x.ym + ': ' + x.skipped;
+    return x.ym + ': 칸 추가 완료, 최종 수식 ' + x.changed + '줄 바꿈' + (x.odd.length ? '\n  ※ 모양이 달라 그대로 둔 최종 수식: ' + x.odd.slice(0, 15).join(', ') + (x.odd.length > 15 ? ' 외 ' + (x.odd.length - 15) + '줄' : '') : '');
+  }).join('\n'));
 }

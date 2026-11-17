@@ -222,13 +222,13 @@ function ledgerFindEntry_(q) {
   if (!lss) return null;
   var sh = ledgerMonthSheet_(lss, q.date);
   if (!sh) return null;
-  var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues();
+  var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
   for (var i = 1; i < v.length; i++) {
-    var memo = String(v[i][LEDGER_COL.memo - 1] || '');
+    var memo = String(v[i][LC.memo - 1] || '');
     if (q.rid ? memo.indexOf(q.rid) >= 0 : (cellYmd_(v[i][LEDGER_COL.date - 1], tz) === q.date && String(v[i][LEDGER_COL.no - 1]) === String(q.no) && String(v[i][LEDGER_COL.name - 1] || '').trim())) {
       var rid = q.rid || ((/ESD-\d{6}-[A-Z0-9]{4}/.exec(memo) || [])[0] || '');
       return { sheet: sh, row: i + 1, no: v[i][LEDGER_COL.no - 1], name: String(v[i][LEDGER_COL.name - 1] || ''), area: String(v[i][LEDGER_COL.area - 1] || ''),
-        memo: memo, weight: v[i][LEDGER_COL.weight - 1], rid: rid, cancelled: /^\[취소/.test(memo) };
+        memo: memo, memoCol: LC.memo, weight: v[i][LEDGER_COL.weight - 1], rid: rid, cancelled: /^\[취소/.test(memo) };
     }
   }
   return null;
@@ -245,8 +245,8 @@ function cancelReservation(input) {
     if (f) {
       if (f.cancelled) msgs.push('장부: 이미 취소 표시돼 있어요 (' + f.no + '번 ' + f.name + ')');
       else {
-        f.sheet.getRange(f.row, LEDGER_COL.memo).setValue('[취소 ' + stamp + '] ' + f.memo);
-        f.sheet.getRange(f.row, 1, 1, LEDGER_COL.memo).setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setFontLine('line-through');
+        f.sheet.getRange(f.row, f.memoCol).setValue('[취소 ' + stamp + '] ' + f.memo);
+        f.sheet.getRange(f.row, 1, 1, f.memoCol).setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setFontLine('line-through');
         bumpLedgerCount_(q.date, -1);
         msgs.push('장부: ' + f.no + '번 ' + f.name + ' 줄에 빨간 취소선 표시 (번호는 그대로)' + (String(f.weight == null ? '' : f.weight).trim() ? ' — 무게가 이미 적혀 있으니 확인해 주세요' : ''));
       }

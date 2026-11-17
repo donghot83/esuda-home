@@ -112,7 +112,7 @@ function alimPicked_(rid) {
 function alimSettled_(rid, lr, amount) {
   var r = bookRowByRid_(rid);
   if (!r) return { ok: false, skipped: 'no_booking' };
-  var w = (+lr.weight || 0) - (+lr.loss || 0);
+  var w = (+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0);   // 정산 중량 = 무게 - 무상제외 - 로스
   if (amount > 0) {
     if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid)) return { ok: true, skipped: 'already' };
     var vars = { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),

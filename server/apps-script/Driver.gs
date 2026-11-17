@@ -77,13 +77,13 @@ function driverListBuild_(date, R) {
   var g = function (row, h) { var i = book.col(h); return i >= 0 ? String(row[i] == null ? '' : row[i]) : ''; };
   var st = driverStatus_(date), pc = pickPhotoCounts_(date);
   if (sh) {
-    var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues();
+    var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
     for (var i = 1; i < v.length; i++) {
       if (cellYmd_(v[i][LEDGER_COL.date - 1], tz) !== date) continue;
       var name = String(v[i][LEDGER_COL.name - 1] || '').trim();
       if (!name) continue;
       var area = String(v[i][LEDGER_COL.area - 1] || '').trim(), addr = String(v[i][LEDGER_COL.addr - 1] || '').trim();
-      var memo = String(v[i][LEDGER_COL.memo - 1] || '');
+      var memo = String(v[i][LC.memo - 1] || '');
       var m = /ESD-\d{6}-[A-Z0-9]{4}/.exec(memo), rid = m ? m[0] : '';
       var cm = /^\[취소\s*([^\]]*)\]\s*/.exec(memo); if (cm) memo = memo.slice(cm[0].length);
       var it = { no: v[i][LEDGER_COL.no - 1] || '', id: rid || ('K:' + name + '|' + addr), rid: rid, name: name, area: area, addr: addr, memo: memo.replace(/^ESD-\d{6}-[A-Z0-9]{4} 신청페이지 \/ /, ''),
@@ -234,8 +234,9 @@ function pickupPhoto_(b) {
       weighPhotos_(null, rid).forEach(function (p) { var arr = p.kind === '로스' ? loss : weigh; if (arr.length < 4) { var d = b64(p.fileId); if (d) arr.push(d); } });
       var rec = weighRecords_()[fmtDate_(bk.data[i][bk.col('수거일')]) + '|' + rid];
       if (rec && rec.lossDone && +rec.loss > 0) lossKg = +rec.loss;
+      var exclKg = rec && rec.lossDone && +rec.excl > 0 ? +rec.excl : '';
     }
-    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos, weigh: weigh, loss: loss, lossKg: lossKg };
+    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos, weigh: weigh, loss: loss, lossKg: lossKg, exclKg: exclKg || '', lossUnit: lossUnitPrice_() };
   }
   return { ok: false, error: 'not_found' };
 }

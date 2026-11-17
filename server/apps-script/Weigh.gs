@@ -13,12 +13,11 @@
  */
 
 var SHEET_WEIGH = '계량';
-var WEIGH_HEADERS = ['수거일', 'ID', '번호', '이름', '봉지', '무게', '계량시각', '로스', '로스확인', '로스시각'];
+var WEIGH_HEADERS = ['수거일', 'ID', '번호', '이름', '봉지', '무게', '계량시각', '로스', '로스확인', '로스시각', '무상제외'];   // 2026-11-17 무상제외 추가(끝에)
 var SHEET_WEIGH_PHOTO = '계량사진';
 var WEIGH_PHOTO_HEADERS = ['수거일', 'ID', '이름', '종류', '파일ID', '시각'];
 var WEIGH_FOLDER_NAME = '이수다 계량사진';
 var WEIGH_PHOTO_MAX = 6;   // 고객·종류별
-var LEDGER_LOSS_COL = 7;   // G
 
 function checkWeighKey_(key) {
   var k = PropertiesService.getScriptProperties().getProperty('WEIGH_KEY');
@@ -50,18 +49,18 @@ function weighFolder_() {
 function weighLedgerRows_(date) {
   var lss = ledgerOpen_(date), sh = lss && ledgerMonthSheet_(lss, date);
   if (!sh) return { sh: null, rows: [] };
-  var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues(), out = [];
+  var tz = lss.getSpreadsheetTimeZone() || 'GMT', v = sh.getDataRange().getValues(), out = [], LC = ledgerCols_(sh, v);
   for (var i = 1; i < v.length; i++) {
     if (cellYmd_(v[i][LEDGER_COL.date - 1], tz) !== date) continue;
     var name = String(v[i][LEDGER_COL.name - 1] || '').trim();
     if (!name) continue;
-    var addr = String(v[i][LEDGER_COL.addr - 1] || '').trim(), memo = String(v[i][LEDGER_COL.memo - 1] || '');
+    var addr = String(v[i][LEDGER_COL.addr - 1] || '').trim(), memo = String(v[i][LC.memo - 1] || '');
     var m = /ESD-\d{6}-[A-Z0-9]{4}/.exec(memo), rid = m ? m[0] : '';
     out.push({ row: i + 1, id: rid || ('K:' + name + '|' + addr), rid: rid, no: v[i][LEDGER_COL.no - 1] || '', name: name,
-      area: String(v[i][LEDGER_COL.area - 1] || '').trim(), weight: v[i][LEDGER_COL.weight - 1], loss: v[i][LEDGER_LOSS_COL - 1],
-      amount: v[i][8], cancelled: /^\[취소/.test(memo) });
+      area: String(v[i][LEDGER_COL.area - 1] || '').trim(), weight: v[i][LEDGER_COL.weight - 1], loss: v[i][LC.loss - 1],
+      excl: LC.excl ? v[i][LC.excl - 1] : '', amount: v[i][LC.amount - 1], cancelled: /^\[취소/.test(memo) });
   }
-  return { sh: sh, rows: out };
+  return { sh: sh, rows: out, cols: LC };
 }
 
 /** '계량' 탭 → {key(date|id): {row, bags, weight, at, loss, lossDone, lossAt}} */
@@ -69,12 +68,13 @@ function weighRecords_() {
   var sh = ss_().getSheetByName(SHEET_WEIGH), out = {};
   if (!sh) return out;
   sh.getDataRange().getValues().slice(1).forEach(function (r, i) {
-    out[fmtDate_(r[0]) + '|' + String(r[1])] = { row: i + 2, no: r[2], name: String(r[3]), bags: r[4], weight: r[5], at: String(r[6] || ''), loss: r[7], lossDone: String(r[8]) === 'Y', lossAt: String(r[9] || '') };
+    out[fmtDate_(r[0]) + '|' + String(r[1])] = { row: i + 2, no: r[2], name: String(r[3]), bags: r[4], weight: r[5], at: String(r[6] || ''), loss: r[7], lossDone: String(r[8]) === 'Y', lossAt: String(r[9] || ''), excl: r[10] };
   });
   return out;
 }
 function weighUpsert_(date, id, fields) {
   var sh = sheet_(SHEET_WEIGH, WEIGH_HEADERS), rec = weighRecords_()[date + '|' + id];
+  if (fields['무상제외'] != null) ensureBookHeaders_(sh, ['무상제외']);   // 예전에 만든 탭이면 머리글 붙이기
   var row = rec ? rec.row : sh.getDataRange().getValues().length + 1;
   if (!rec) sh.getRange(row, 1, 1, 2).setValues([[date, id]]);
   Object.keys(fields).forEach(function (h) { sh.getRange(row, WEIGH_HEADERS.indexOf(h) + 1).setValue(fields[h]); });
@@ -114,16 +114,16 @@ function weighList_(b) {
     var rec = recs[date + '|' + x.id] || {};
     var num = function (v) { return v === '' || v == null || isNaN(+v) ? '' : +v; };
     return { id: x.id, rid: x.rid ? shortRid_(x.rid) : '', no: x.no, name: x.name, area: x.area, cancelled: x.cancelled,
-      ledgerWeight: num(x.weight), ledgerLoss: num(x.loss), amount: typeof x.amount === 'number' ? x.amount : String(x.amount || ''),
+      ledgerWeight: num(x.weight), ledgerLoss: num(x.loss), ledgerExcl: num(x.excl), amount: typeof x.amount === 'number' ? x.amount : String(x.amount || ''),
       bags: rec.bags === '' || rec.bags == null ? '' : +rec.bags, weighed: !!rec.at, lossDone: !!rec.lossDone, loss: num(rec.loss), free: !!(x.rid && free[x.rid]),
       photos: pc[x.id] || { 계량: 0, 로스: 0 } };
   });
-  return { ok: true, date: date, label: R_dateLabel_(date), ledger: !!L.sh, items: items };
+  return { ok: true, date: date, label: R_dateLabel_(date), ledger: !!L.sh, exclCol: !!(L.cols && L.cols.excl), unit: transferUnitPrice_(), lossUnit: lossUnitPrice_(), items: items };
 }
 
 function weighFind_(date, id) {
   var L = weighLedgerRows_(date);
-  for (var i = 0; i < L.rows.length; i++) if (L.rows[i].id === id) return { sh: L.sh, x: L.rows[i] };
+  for (var i = 0; i < L.rows.length; i++) if (L.rows[i].id === id) return { sh: L.sh, x: L.rows[i], c: L.cols };
   return null;
 }
 
@@ -148,24 +148,35 @@ function weighSave_(b) {
   } finally { lock.releaseLock(); }
 }
 
-/** {action:'lossSave', key, date, id, loss(0 = 로스 없음), force?} → 장부 로스 칸 + 로스 확인 */
+/** {action:'lossSave', key, date, id, loss(폐기물, 0 = 없음), excl?(무상제외: 박스·이불 등), force?} → 장부 로스·무상제외 칸 + 로스 확인
+ *  로스 = 무게에서 빼고 kg당 로스단가 공제 / 무상제외 = 무게에서만 뺌(장부에 '무상제외' 칸이 있어야 함) */
 function lossSave_(b) {
   if (!checkWeighKey_(b.key)) return { ok: false, error: 'forbidden' };
   var date = String(b.date || ''), id = String(b.id || '').slice(0, 200), loss = weighNum_(b.loss);
+  var excl = b.excl === '' || b.excl == null ? 0 : weighNum_(b.excl);
   if (!rules_().parseYmd(date) || !id) return { ok: false, error: 'bad_request' };
-  if (!(loss >= 0 && loss < 1000)) return { ok: false, error: 'bad_loss' };
+  if (!(loss >= 0 && loss < 1000) || !(excl >= 0 && excl < 1000)) return { ok: false, error: 'bad_loss' };
   var lock = ledgerLock_();
   if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
   try {
     var f = weighFind_(date, id);
     if (!f) return { ok: false, error: 'not_found' };
+    if (excl > 0 && !f.c.excl) return { ok: false, error: 'no_excl_col' };
     var w = +f.x.weight;
-    if (w > 0 && loss > w) return { ok: false, error: 'loss_over' };
-    var cur = f.x.loss, curN = cur === '' || cur == null || isNaN(+cur) ? 0 : +cur;
-    if (!sameKg_(curN, loss) && curN > 0 && !b.force) return { ok: false, error: 'mismatch', ledger: curN };
-    if (!sameKg_(curN, loss)) f.sh.getRange(f.x.row, LEDGER_LOSS_COL).setValue(loss > 0 ? loss : '');
-    weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '로스': loss, '로스확인': 'Y', '로스시각': weighNow_() });
-    return { ok: true, loss: loss };
+    if (w > 0 && loss + excl > w) return { ok: false, error: 'loss_over' };
+    var n0 = function (v) { return v === '' || v == null || isNaN(+v) ? 0 : +v; };
+    var curL = n0(f.x.loss), curX = n0(f.x.excl);
+    if (!b.force) {
+      if (!sameKg_(curL, loss) && curL > 0) return { ok: false, error: 'mismatch', ledger: curL, what: '로스' };
+      if (!sameKg_(curX, excl) && curX > 0) return { ok: false, error: 'mismatch', ledger: curX, what: '무상제외' };
+    }
+    if (!sameKg_(curL, loss)) f.sh.getRange(f.x.row, f.c.loss).setValue(loss > 0 ? loss : '');
+    if (f.c.excl && !sameKg_(curX, excl)) {
+      f.sh.getRange(f.x.row, f.c.excl).setValue(excl > 0 ? excl : '');
+      if (excl > 0) { try { ensureFinalFormula_(f.sh, f.x.row); } catch (e) { logError_('최종 수식', e); } }
+    }
+    weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '로스': loss, '로스확인': 'Y', '로스시각': weighNow_(), '무상제외': excl });
+    return { ok: true, loss: loss, excl: excl };
   } finally { lock.releaseLock(); }
 }
 
@@ -240,18 +251,19 @@ function settleReview_(dates) {
         if (!(w > 0)) warn.push('무게 없음');
         else if (w < 1 || w > 300) warn.push('무게 확인');
         if (rec.at && !sameKg_(rec.weight, w)) warn.push('장부 무게가 계량 화면과 다름');
+        if (w > 0 && (+x.excl || 0) + l > w) warn.push('제외+로스가 무게보다 큼');
         if (!p.계량) warn.push('계량 사진 없음');
         if (rec.at && !rec.lossDone) warn.push('로스 미정');
         if (l > 0 && !p.로스) warn.push('로스 사진 없음');
       }
       out.push({ '수거일': date, '번호': x.no + (rec.bags !== '' && rec.bags != null ? '-' + rec.bags : ''), '이름': x.name, '구분': x.rid ? (isFree ? '신청페이지(무상 희망)' : '신청페이지') : '카톡·직원',
-        '무게': x.weight, '로스': x.loss, '금액': x.amount, '계량사진': p.계량, '로스사진': p.로스, '로스확인': rec.lossDone ? '확인' : (rec.at ? '미정' : '-'),
+        '무게': x.weight, '무상제외': x.excl, '로스': x.loss, '금액': x.amount, '계량사진': p.계량, '로스사진': p.로스, '로스확인': rec.lossDone ? '확인' : (rec.at ? '미정' : '-'),
         '알림톡': x.rid && /^01\d{8,9}$/.test(phone.replace(/[^0-9]/g, '')) ? (isFree ? '무상수거 안내' : '보냄') : '안 감(연락처 없음)', '경고': warn.join(', ') });
     });
   });
   return out;
 }
-var REVIEW_HEADERS = ['수거일', '번호', '이름', '구분', '무게', '로스', '금액', '계량사진', '로스사진', '로스확인', '알림톡', '경고'];
+var REVIEW_HEADERS = ['수거일', '번호', '이름', '구분', '무게', '무상제외', '로스', '금액', '계량사진', '로스사진', '로스확인', '알림톡', '경고'];
 function menuSettleReview_() {
   var ui = SpreadsheetApp.getUi(), R = rules_();
   var p = ui.prompt('정산 검토표', '수거일을 넣어 주세요. 여러 날이면 쉼표로 (예: 11/16 또는 11/16, 11/17)', ui.ButtonSet.OK_CANCEL);

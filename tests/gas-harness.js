@@ -49,6 +49,7 @@ function makeGrid(name, rows) {
         getValue() { return (rows[r - 1] || [])[c - 1]; },
         setFormulas(fs) { fs.forEach((row, i) => row.forEach((f, j) => { fit(r + i); (rows[r - 1 + i].f = rows[r - 1 + i].f || {})[c + j] = f; })); return rng; },
         getFormulas() { return Array.from({ length: nr || 1 }, (_, i) => Array.from({ length: nc || 1 }, (_, j) => ((rows[r - 1 + i] || {}).f || {})[c + j] || '')); },
+        getFormula() { return ((rows[r - 1] || {}).f || {})[c] || ''; },
         setBackground(v) { fit(r); rows[r - 1].bg = v; return rng; },
         setFontColor(v) { fit(r); rows[r - 1].fg = v; return rng; },
         setFontLine(v) { fit(r); rows[r - 1].line = v; return rng; },
@@ -58,6 +59,12 @@ function makeGrid(name, rows) {
       return rng;
     },
     deleteRow(r) { rows.splice(r - 1, 1); },
+    insertColumnAfter(col) {   // 구글 시트처럼: 오른쪽 칸 밀기 + 수식 안 칸 참조(col보다 오른쪽)도 한 칸씩
+      const L = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+      const N = t => t.split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+      const shift = f => String(f).replace(/\b([A-Z]{1,2})(\d+)\b/g, (m, a, d) => (N(a) > col ? L(N(a) + 1) : a) + d);
+      rows.forEach(row => { row.splice(col, 0, ''); if (row.f) { const nf = {}; Object.keys(row.f).forEach(k => { nf[+k > col ? +k + 1 : +k] = shift(row.f[k]); }); row.f = nf; } });
+    },
     getMaxColumns() { return 26; },
     moveRows(rng, dest) { const from = rng._r - 1, row = rows.splice(from, 1)[0]; rows.splice(dest - 1 > from ? dest - 2 : dest - 1, 0, row); },
     getName() { return name; },

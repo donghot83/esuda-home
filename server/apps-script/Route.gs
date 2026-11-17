@@ -119,7 +119,7 @@ function routeDate(date, opts) {
   var lock = ledgerLock_();
   if (!lock.tryLock(20000)) return { ok: false, msg: '잠시 뒤 다시 해 주세요' };
   try {
-    var v = sh.getDataRange().getValues(), rows = [];
+    var v = sh.getDataRange().getValues(), rows = [], LC = ledgerCols_(sh, v);
     for (var i = 1; i < v.length; i++) {
       if (cellYmd_(v[i][LEDGER_COL.date - 1], tz) !== date || !String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;
       rows.push(i);
@@ -130,7 +130,7 @@ function routeDate(date, opts) {
     var book = bookData_(), byRid = {};
     for (var j = 1; j < book.data.length; j++) byRid[String(book.data[j][book.col('예약번호')])] = book.data[j];
     var items = rows.map(function (i) {
-      var memo = String(v[i][LEDGER_COL.memo - 1] || ''), area = String(v[i][LEDGER_COL.area - 1] || ''), addr = String(v[i][LEDGER_COL.addr - 1] || '');
+      var memo = String(v[i][LC.memo - 1] || ''), area = String(v[i][LEDGER_COL.area - 1] || ''), addr = String(v[i][LEDGER_COL.addr - 1] || '');
       var rid = (/ESD-\d{6}-[A-Z0-9]{4}/.exec(memo) || [])[0], br = rid && byRid[rid];
       var q = br ? String(br[book.col('도로명주소')] || br[book.col('지번주소')] || '') : '';
       if (!q) q = driverMapQuery_(area, addr);

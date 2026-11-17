@@ -8,7 +8,7 @@
   var API = isLocal ? '/api' : CFG.apiUrl;
   var $ = function (id) { return document.getElementById(id); };
   var KEY_STORE = 'esuda_weigh_key';
-  var st = { key: '', date: '', items: [], tab: 'weigh', open: '', pend: {}, busy: false, thumbs: {} };
+  var st = { key: '', date: '', items: [], tab: 'weigh', open: '', pend: {}, busy: false, thumbs: {}, exclCol: false, unit: 250, lossUnit: 200 };
 
   function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
   function save(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
@@ -34,7 +34,7 @@
       }
       $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
       if (r.date !== st.date) { st.open = ''; st.pend = {}; st.thumbs = {}; }
-      st.date = r.date; st.items = r.items;
+      st.date = r.date; st.items = r.items; st.exclCol = !!r.exclCol; st.unit = r.unit || 250; st.lossUnit = r.lossUnit || 200;
       $('dayLabel').textContent = r.label;
       $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거가 없어요.');
       render();
@@ -51,10 +51,11 @@
     Array.prototype.forEach.call(document.querySelectorAll('.wg-tabs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === st.tab); });
     $('help').textContent = st.tab === 'weigh'
       ? '고객을 눌러 봉지 수·무게를 넣고, 갤러리에서 계량 사진을 골라 저장해요. 장부에 적힌 무게와 다르면 한 번 더 물어봐요.'
-      : '로스는 나중에 따로 정해도 돼요. 로스를 정하기 전에는 그 고객 입금이 이체 파일에서 빠져요.';
+      : '로스(폐기물)는 무게에서 빼고 kg당 ' + st.lossUnit + '원 공제, 무상제외(박스·이불 등)는 무게에서만 빼요. 나중에 따로 정해도 되고, 정하기 전에는 그 고객 입금이 이체 파일에서 빠져요.';
     var list = st.tab === 'weigh' ? st.items : lossTargets().slice().sort(function (a, b) { return (a.lossDone - b.lossDone); });
     $('list').innerHTML = list.map(function (it) { return st.tab === 'weigh' ? weighCard(it) : lossCard(it); }).join('') ||
       (st.tab === 'loss' ? '<li class="dv-sub">계량한 고객이 아직 없어요.</li>' : '');
+    if (st.tab === 'loss') calcPreview();
   }
 
   function thumbsHtml(it, kind) {
@@ -91,17 +92,22 @@
 
   function lossCard(it) {
     var id = esc(it.id), w = it.ledgerWeight;
-    var stat = it.lossDone ? '<b class="good">' + (it.loss > 0 ? '로스 ' + kg(it.loss) : '로스 없음') + ' ✓</b>' : '<span class="warn">로스 미정</span>';
+    var stat = it.lossDone ? '<b class="good">' + (it.loss > 0 ? '로스 ' + kg(it.loss) : '로스 없음') + (it.ledgerExcl > 0 ? ' · 제외 ' + kg(it.ledgerExcl) : '') + ' ✓</b>' : '<span class="warn">로스 미정</span>';
     stat += '<br><span>' + kg(w) + (it.photos.로스 ? ' · 📷 ' + it.photos.로스 : '') + '</span>';
     var html = '<li class="wg-item' + (it.lossDone ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + '</span></span><span class="wg-st">' + stat + '</span></button>';
     if (st.open === it.id) {
       var cur = it.lossDone ? it.loss : (it.ledgerLoss !== '' ? it.ledgerLoss : '');
+      var curX = it.ledgerExcl !== '' && it.ledgerExcl != null ? it.ledgerExcl : '';
       html += '<div class="wg-ed">' +
-        '<div class="wg-f"><label>로스 (kg) — 무게 ' + esc(kg(w)) + '<input type="number" inputmode="decimal" step="0.1" min="0" id="inL" value="' + esc(cur) + '" placeholder="0.0"></label></div>' +
+        '<p class="wg-note">무게 <b>' + esc(kg(w)) + '</b></p>' +
+        '<div class="wg-f">' + (st.exclCol ? '<label>무상제외 (kg)<small> 박스·이불 등</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inX" value="' + esc(curX) + '" placeholder="0"></label>' : '') +
+        '<label>로스 (kg)<small> 폐기물 −' + st.lossUnit + '원/kg</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inL" value="' + esc(cur) + '" placeholder="0"></label></div>' +
+        (st.exclCol ? '' : '<p class="wg-note">장부에 「무상제외」 칸이 아직 없어서 무상제외는 넣을 수 없어요.</p>') +
+        '<p class="wg-calc" id="calc"></p>' +
         (it.ledgerLoss !== '' && !it.lossDone ? '<p class="wg-note">장부에 적힌 로스: <b>' + kg(it.ledgerLoss) + '</b></p>' : '') +
         thumbsHtml(it, '로스') +
         (it.photos.로스 && !st.thumbs[it.id] ? '<button type="button" class="wg-link" data-thumbs="1">로스 사진 ' + it.photos.로스 + '장 보기·지우기</button>' : '') +
-        '<div class="wg-btns"><button type="button" class="none wide" data-save="none">로스 없음 (0kg)</button>' +
+        '<div class="wg-btns"><button type="button" class="none wide" data-save="none">로스·제외 없음 (0kg)</button>' +
         '<button type="button" data-pick="로스">📷 로스 사진 고르기</button><button type="button" class="save" data-save="loss">로스 저장</button></div>' +
         '<p class="wg-note" id="edMsg"></p></div>';
     }
@@ -135,6 +141,17 @@
       render();
     });
   });
+
+  /* 로스 탭: 입력하는 동안 최종 무게·예상 금액 (장부 수식과 같은 계산) */
+  function calcPreview() {
+    var el = $('calc'), it = st.items.filter(function (x) { return x.id === st.open; })[0];
+    if (!el || !it) return;
+    var w = +it.ledgerWeight || 0, x = $('inX') ? (+$('inX').value || 0) : 0, l = +$('inL').value || 0, fin = Math.round((w - x - l) * 100) / 100;
+    if (!(w > 0)) { el.textContent = ''; return; }
+    if (x + l > w) { el.innerHTML = '<span class="warn">제외+로스가 무게보다 커요</span>'; return; }
+    el.innerHTML = '최종 <b>' + fin + 'kg</b> · ' + (fin >= 15 ? '예상 금액 <b>' + Math.round(fin * st.unit - l * st.lossUnit).toLocaleString('ko-KR') + '원</b>' : '<b>무상수거</b> (15kg 미만)');
+  }
+  $('list').addEventListener('input', function (e) { if (e.target.id === 'inL' || e.target.id === 'inX') calcPreview(); });
 
   function setMsg(t, warn) { var el = $('edMsg'); if (el) { el.textContent = t; el.className = 'wg-note' + (warn ? ' warn' : ''); } }
   function disableEd(on) { Array.prototype.forEach.call(document.querySelectorAll('.wg-ed button, .wg-ed input'), function (b) { b.disabled = on; }); }
@@ -175,17 +192,20 @@
     }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
   }
 
-  function saveLoss(it, loss, force) {
-    if (loss === '' || isNaN(+loss) || +loss < 0) { setMsg('로스 kg을 넣거나 "로스 없음"을 눌러 주세요.', true); return; }
+  function saveLoss(it, loss, force, excl) {
+    if (excl == null) excl = $('inX') ? $('inX').value : '';
+    if (loss === '' && +excl > 0) loss = 0;
+    if (loss === '' || isNaN(+loss) || +loss < 0 || (excl !== '' && (isNaN(+excl) || +excl < 0))) { setMsg('로스 kg을 넣거나 "로스·제외 없음"을 눌러 주세요.', true); return; }
     disableEd(true); setMsg('저장 중…');
-    post({ action: 'lossSave', key: st.key, date: st.date, id: it.id, loss: loss, force: !!force }).then(function (r) {
+    post({ action: 'lossSave', key: st.key, date: st.date, id: it.id, loss: loss, excl: excl, force: !!force }).then(function (r) {
       if (!r.ok && r.error === 'mismatch') {
         disableEd(false);
-        if (confirm('장부에는 로스 ' + r.ledger + 'kg로 적혀 있어요.\n' + loss + 'kg로 바꿀까요?')) return saveLoss(it, loss, true);
-        setMsg('장부 값(' + r.ledger + 'kg)과 달라서 저장하지 않았어요.', true); return;
+        var what = r.what || '로스', now = what === '무상제외' ? (+excl || 0) : loss;
+        if (confirm('장부에는 ' + what + ' ' + r.ledger + 'kg로 적혀 있어요.\n' + now + 'kg로 바꿀까요?')) return saveLoss(it, loss, true, excl);
+        setMsg('장부 ' + what + ' 값(' + r.ledger + 'kg)과 달라서 저장하지 않았어요.', true); return;
       }
-      if (!r.ok) { disableEd(false); setMsg(r.error === 'loss_over' ? '로스가 무게보다 커요. 확인해 주세요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
-      it.lossDone = true; it.loss = r.loss; it.ledgerLoss = r.loss > 0 ? r.loss : '';
+      if (!r.ok) { disableEd(false); setMsg(r.error === 'loss_over' ? '제외+로스가 무게보다 커요. 확인해 주세요.' : r.error === 'no_excl_col' ? '장부에 무상제외 칸이 아직 없어요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
+      it.lossDone = true; it.loss = r.loss; it.ledgerLoss = r.loss > 0 ? r.loss : ''; it.ledgerExcl = r.excl > 0 ? r.excl : '';
       uploadPend(it, '로스').then(function (fail) {
         disableEd(false);
         if (fail) { render(); setMsg('로스는 저장했어요. 사진 ' + fail + '장을 못 올렸어요 — 다시 골라 저장해 주세요.', true); return; }
@@ -222,7 +242,7 @@
     if ((b = e.target.closest('[data-save]'))) {
       var w = b.getAttribute('data-save');
       if (w === 'weigh') saveWeigh(it);
-      else if (w === 'none') saveLoss(it, 0);
+      else if (w === 'none') saveLoss(it, 0, false, 0);
       else saveLoss(it, $('inL').value);
     }
   });

@@ -37,3 +37,7 @@
 .wg-link{border:0;background:none;color:#0b4ea2;font-weight:700;font-size:14px;margin-top:8px;padding:4px 0}
 .wg-free{display:inline-block;font-size:11px;font-weight:800;color:#0b4ea2;background:#e8f1fb;border-radius:6px;padding:1px 6px;margin-left:2px}
 .wg-st .free{color:#0b4ea2;font-weight:700}
+.wg-f label small{font-weight:500;font-size:11px;color:var(--sub)}
+.wg-calc{margin-top:10px;font-size:15px;background:#f1f8ee;border-radius:10px;padding:8px 10px}
+.wg-calc:empty{display:none}
+.wg-calc .warn{color:var(--warn);font-weight:700}
