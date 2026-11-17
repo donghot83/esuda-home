@@ -143,7 +143,7 @@ function ready_(b) {
     if (String(data[i][cSt]) !== '확정') return { ok: false, error: 'not_active' };
     var date = fmtDate_(data[i][cD]);
     if (String(data[i][cR] || '')) return { ok: true, already: true, date: date };
-    sh.getRange(i + 1, cR + 1).setValue(Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));
+    sh.getRange(i + 1, cR + 1).setNumberFormat('@').setValue(Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));   // 글자로(날짜로 바뀌지 않게)
     driverCacheClear_(date);
     return { ok: true, date: date };
   }

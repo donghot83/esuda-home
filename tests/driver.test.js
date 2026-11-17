@@ -112,3 +112,13 @@ test('2026-11-17 5분 동기화가 기사님 근무 시간엔 오늘·내일 목
   const r = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' });
   assert.strictEqual(r.cached, true); assert.strictEqual(r.items[0].name, '미리손님');
 });
+
+test('2026-11-17 준비완료 시각: 시트가 날짜로 바꿔 저장해도 기사님 화면엔 MM-dd HH:mm', () => {
+  const env = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD] }, props: { DRIVER_KEY: 'GOODKEY123' } });
+  const a = post(env, sub({ date: '2026-11-16' }));
+  const h = env.sheet('예약').rows[0];
+  let c = h.indexOf('준비완료'); if (c < 0) { h.push('준비완료'); c = h.length - 1; }
+  env.sheet('예약').rows[1][c] = new Date('2026-11-17T08:31:00Z');   // 시트가 날짜로 바꾼 경우
+  const it = post(env, { action: 'driverList', key: 'GOODKEY123', date: '2026-11-16', fresh: true }).items.find(x => x.rid === a.reservationId);
+  assert.strictEqual(it.ready, '11-17 17:31');
+});

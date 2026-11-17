@@ -99,7 +99,8 @@ function driverListBuild_(date, R) {
         it.amount = g(br, '수거양');
         it.request = g(br, '요청사항');
         it.photo = g(br, '사진방식');
-        it.ready = g(br, '준비완료');
+        var rv = br[book.col('준비완료')];   // 2026-11-17: 시트가 'MM-dd HH:mm' 글자를 날짜로 바꿔 저장해서 다시 글자로
+        it.ready = rv && typeof rv.getTime === 'function' ? Utilities.formatDate(rv, 'Asia/Seoul', 'MM-dd HH:mm') : g(br, '준비완료');
       }
       it.state = (st[it.id] || {}).state || '';
       it.photos = pc[it.id] || 0;
