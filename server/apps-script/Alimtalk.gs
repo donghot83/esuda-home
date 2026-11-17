@@ -78,7 +78,7 @@ function sendAlimtalk_(kind, rid, phone, vars) {
 /** ① 예약 완료 */
 function alimBooked_(c, rid) {
   return sendAlimtalk_('booked', rid, c.phone, {
-    '#{이름}': c.name, '#{예약번호}': rid, '#{수거일}': R_dateLabel_(c.date),
+    '#{이름}': c.name, '#{예약번호}': shortRid_(rid), '#{수거일}': R_dateLabel_(c.date),
     '#{주소}': (String(c.roadAddress || c.jibunAddress || '') + ' ' + String(c.addressDetail || '')).trim()
   });
 }
@@ -99,7 +99,7 @@ function alimPicked_(rid) {
   var r = bookRowByRid_(rid);
   if (!r || r.get('확정상태') !== '확정') return { ok: false, skipped: 'no_booking' };
   if (alimSent_('picked', rid) || alimSent_('pickedPhoto', rid)) return { ok: true, skipped: 'already' };
-  var vars = { '#{이름}': r.get('이름'), '#{예약번호}': rid };
+  var vars = { '#{이름}': r.get('이름'), '#{예약번호}': shortRid_(rid) };
   if (alimConf_().tpl('pickedPhoto') && pickPhotos_(null, rid).length) {
     vars['#{사진코드}'] = pickPhotoCode_(rid, true);
     return sendAlimtalk_('pickedPhoto', rid, r.get('연락처'), vars);
@@ -137,7 +137,7 @@ function sendSameDayNotices() {
     if (g('확정상태') !== '확정' || fmtDate_(row[b.col('수거일')]) !== today) continue;
     var rid = g('예약번호');
     var r = sendAlimtalk_('sameday', rid, g('연락처'), {
-      '#{이름}': g('이름'), '#{예약번호}': rid,
+      '#{이름}': g('이름'), '#{예약번호}': shortRid_(rid),
       '#{주소}': ((g('도로명주소') || g('지번주소')) + ' ' + g('상세주소')).trim()
     });
     if (r.ok && !r.skipped) out.sent++; else if (r.ok || r.skipped) out.skipped++; else out.failed++;

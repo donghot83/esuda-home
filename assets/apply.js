@@ -287,7 +287,8 @@
   }
 
   // ---------------- 신청 (2026-11-16: 확정 화면을 먼저 보여 주고 저장은 뒤에서 — 창을 닫아도 끝까지 전송)
-  function rand4() { var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < 4; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
+  // 2026-11-17: 예약번호 끝 4자리는 숫자만 (고객이 부르기 쉽게)
+  function rand4() { var a = '0123456789', s = ''; for (var i = 0; i < 4; i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
   function saveBooking(p) {
     var attempt = function (n) {
       return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(p), keepalive: true })
@@ -324,7 +325,7 @@
       return saveBooking(p).then(function (r) {
         if (r && r.ok) {
           TRK.done = true; track('done', r.reservationId);
-          if (r.reservationId !== p.reservationIdHint) $('doneId').textContent = r.reservationId;
+          if (r.reservationId !== p.reservationIdHint) $('doneId').textContent = R.shortId(r.reservationId);
           setSave('ok', '✓ 예약이 저장됐어요');
           if (want) showPhotoLine(r.reservationId, r.photos || 0, want);
           track('t_confirm', '사진' + ids.length + '장 ' + ((Date.now() - tStart) / 1000).toFixed(1) + '초 (화면 ' + ((tShown - tStart) / 1000).toFixed(1) + '초, 서버 ' + ((r.srv && r.srv.total) / 1000 || 0).toFixed(1) + '초)');
@@ -348,7 +349,7 @@
       if (rb) rb.addEventListener('click', function () {
         setSave('wait', '⏳ 다시 저장하는 중…');
         saveBooking(p).then(function (r) {
-          if (r && r.ok) { TRK.done = true; track('done', r.reservationId); $('doneId').textContent = r.reservationId; setSave('ok', '✓ 예약이 저장됐어요'); if (want) showPhotoLine(r.reservationId, r.photos || 0, want); }
+          if (r && r.ok) { TRK.done = true; track('done', r.reservationId); $('doneId').textContent = R.shortId(r.reservationId); setSave('ok', '✓ 예약이 저장됐어요'); if (want) showPhotoLine(r.reservationId, r.photos || 0, want); }
           else setSave('bad', '⚠️ 저장하지 못했어요. 카카오채널로 예약번호와 함께 알려 주세요.');
         }).catch(function () { setSave('bad', '⚠️ 인터넷 연결을 확인하고 다시 시도해 주세요.'); });
       });
@@ -369,7 +370,7 @@
 
   function showDone(r, up) {
     var dt = R.parseYmd(r.date);
-    $('doneId').textContent = r.reservationId;
+    $('doneId').textContent = R.shortId(r.reservationId);
     $('doneDate').textContent = (dt.getUTCMonth() + 1) + '월 ' + dt.getUTCDate() + '일 (' + WD[dt.getUTCDay()] + ')';
     $('doneAddr').textContent = (state.address ? state.address.roadAddress : '') + ' ' + $('addrDetail').value;
     var later = !(up && up.pending) && (state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length));
@@ -377,7 +378,7 @@
     if (up && up.pending) { dp.hidden = false; dp.textContent = '📷 사진 ' + up.sent + '장을 함께 접수하는 중이에요.'; }
     if (later) {
       dp.hidden = false;
-      dp.textContent = (up && up.sent < up.total ? '사진 일부를 올리지 못했어요. ' : '') + '카카오채널로 예약번호(' + r.reservationId + ')와 함께 옷 사진을 보내 주세요.';
+      dp.textContent = (up && up.sent < up.total ? '사진 일부를 올리지 못했어요. ' : '') + '카카오채널로 예약번호(' + R.shortId(r.reservationId) + ')와 함께 옷 사진을 보내 주세요.';
       $('doneKakao').textContent = '카카오채널로 사진 보내기'; $('doneKakao').className = 'ap-submit'; $('doneKakao').style.display = 'flex';
       $('doneKakao').style.alignItems = 'center'; $('doneKakao').style.justifyContent = 'center';
     }

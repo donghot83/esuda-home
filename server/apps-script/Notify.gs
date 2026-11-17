@@ -134,7 +134,8 @@ function tidyPrePhotos_() {
  */
 function ready_(b) {
   var rid = String(b && b.reservationId || '').toUpperCase().trim();
-  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid)) return { ok: false, error: 'bad_id' };
+  if (/^\d{4}-[A-Z0-9]{4}$/.test(rid)) rid = resolveRid_(rid) || rid;   // 2026-11-17: 알림톡 버튼이 짧은 번호(1118-4829)로 옴
+  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(rid)) return { ok: false, error: /^\d{4}-[A-Z0-9]{4}$/.test(rid) ? 'not_found' : 'bad_id' };
   var sh = sheet_(SHEET_BOOK, BOOK_HEADERS), hdr = ensureBookHeaders_(sh, ['준비완료']);
   var data = sh.getDataRange().getValues(), cId = hdr.indexOf('예약번호'), cSt = hdr.indexOf('확정상태'), cR = hdr.indexOf('준비완료'), cD = hdr.indexOf('수거일');
   for (var i = 1; i < data.length; i++) {
@@ -147,4 +148,37 @@ function ready_(b) {
     return { ok: true, date: date };
   }
   return { ok: false, error: 'not_found' };
+}
+
+/* ===== 짧은 예약번호 (2026-11-17) — 고객에게는 1118-4829, 안쪽은 ESD-261118-4829 그대로 ===== */
+function shortRid_(rid) { return rules_().shortId(rid); }
+/** 'ESD-…' 또는 '1118-4829' → 예약번호 (짧은 번호는 예약 시트에서 찾음, 여러 해 겹치면 가장 최근) | '' */
+function resolveRid_(input) {
+  var s = String(input || '').toUpperCase().trim();
+  if (/^ESD-\d{6}-[A-Z0-9]{4}$/.test(s)) return s;
+  if (!/^\d{4}-[A-Z0-9]{4}$/.test(s)) return '';
+  var b = bookData_(), c = b.col('예약번호'), hit = '';
+  for (var i = 1; i < b.data.length; i++) { var r = String(b.data[i][c]); if (r.slice(6) === s) hit = r; }
+  return hit;
+}
+/** 직원용 예약 찾기: 이름 / 연락처 뒤 4자리 / 짧은 번호 / 예약번호 → [{rid, short, date, name, area, status}] (최근 것 먼저, 20개) */
+function findBookings_(q) {
+  q = String(q || '').trim();
+  if (!q) return [];
+  var b = bookData_(), out = [], qd = q.replace(/[^0-9]/g, ''), rid = resolveRid_(q);
+  for (var i = b.data.length - 1; i >= 1 && out.length < 20; i--) {
+    var r = b.data[i], g = function (h) { var k = b.col(h); return k >= 0 ? String(r[k] == null ? '' : r[k]) : ''; };
+    var id = g('예약번호'), tel = g('연락처').replace(/[^0-9]/g, '');
+    var hit = rid ? id === rid : (g('이름').indexOf(q) >= 0 || (qd.length === 4 && q.length <= 5 && tel.slice(-4) === qd));
+    if (hit) out.push({ rid: id, short: shortRid_(id), date: fmtDate_(r[b.col('수거일')]), name: g('이름'), area: g('시군구'), status: g('확정상태') });
+  }
+  return out;
+}
+function menuFindBooking_() {
+  var ui = SpreadsheetApp.getUi();
+  var p = ui.prompt('예약 찾기', '이름, 연락처 뒤 4자리, 예약번호(1118-4829) 중 하나를 넣어 주세요.', ui.ButtonSet.OK_CANCEL);
+  if (p.getSelectedButton() !== ui.Button.OK) return;
+  var list = findBookings_(p.getResponseText());
+  ui.alert(list.length ? list.map(function (x) { return x.short + '  ' + R_dateLabel_(x.date) + '  ' + x.name + ' (' + x.area + ')  ' + x.status; }).join('\n') +
+    '\n\n취소하려면 메뉴 「예약 취소」에 앞의 번호(예: ' + list[0].short + ')를 넣으면 돼요.' : '찾는 예약이 없어요. (신청페이지 예약만 찾아요. 카톡 예약은 장부에서 확인)');
 }

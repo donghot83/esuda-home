@@ -33,7 +33,8 @@ test('예약 완료 알림톡: 솔라피 형식(HMAC 서명·pfId·템플릿·�
   assert.strictEqual(m.to, '01012345678');
   assert.strictEqual(m.from, '01000000000');
   assert.deepStrictEqual([m.kakaoOptions.pfId, m.kakaoOptions.templateId], ['KA01PFTEST', 'KA01TPBOOK']);
-  assert.strictEqual(m.kakaoOptions.variables['#{예약번호}'], r.reservationId);
+  assert.strictEqual(m.kakaoOptions.variables['#{예약번호}'], R.shortId(r.reservationId)); // 2026-11-17 고객에게는 짧은 번호
+  assert.match(r.reservationId, /^ESD-261118-\d{4}$/); assert.match(m.kakaoOptions.variables['#{예약번호}'], /^1118-\d{4}$/);
   assert.strictEqual(m.kakaoOptions.variables['#{수거일}'], '11/18(수)');
   assert.strictEqual(m.kakaoOptions.variables['#{주소}'], '서울 마포구 가상북로 233 101호');
   const a = /^HMAC-SHA256 apiKey=TESTKEY, date=(\S+), salt=(\w+), signature=([0-9a-f]{64})$/.exec(f.o.headers.Authorization);
@@ -105,7 +106,7 @@ test('2026-11-16 당일 안내: 오늘 수거할 확정 예약에만 보냄(취�
   assert.deepStrictEqual(JSON.parse(JSON.stringify(r)), { sent: 1, skipped: 0, failed: 0 });
   const m = e.fetches[0].body.messages[0];
   assert.strictEqual(m.kakaoOptions.templateId, 'KA01TPSAME');
-  assert.strictEqual(m.kakaoOptions.variables['#{예약번호}'], a.reservationId);
+  assert.strictEqual(m.kakaoOptions.variables['#{예약번호}'], R.shortId(a.reservationId));
   assert.strictEqual(m.kakaoOptions.variables['#{주소}'], '서울 강남구 가상로 1 101호');
   assert.deepStrictEqual(JSON.parse(JSON.stringify(e.ctx.sendSameDayNotices())), { sent: 0, skipped: 1, failed: 0 }); // 이미 보냄
 });
@@ -156,4 +157,23 @@ test('2026-11-16 사진 없이 완료하거나 사진 템플릿이 아직 없으
   // 카톡 예약도 사진은 저장됨 (알림톡은 없음)
   e.ledger['11월 매입금액'].rows.push([null, D('2026-11-16'), '카톡손님', '은평구', '가상로']);
   assert.strictEqual(e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: 'K:카톡손님|가상로', name: '카톡손님', data: Buffer.from('y').toString('base64') }).ok, true);
+});
+
+test('2026-11-17 짧은 예약번호: 준비 완료 버튼·취소·예약 찾기가 1118-4829 형태로 됨, 옛 번호(영문)도 그대로', () => {
+  assert.strictEqual(R.shortId('ESD-261118-4829'), '1118-4829');
+  assert.strictEqual(R.shortId('ESD-261116-AB12'), '1116-AB12');
+  assert.strictEqual(R.shortId('이상한값'), '이상한값');
+  const e = env({});
+  const a = e.post(sub({ name: '짧은번호고객', phone: '010-5555-7788' }));
+  const short = R.shortId(a.reservationId);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(e.post({ action: 'ready', reservationId: short }))), { ok: true, date: '2026-11-18' });
+  assert.strictEqual(e.post({ action: 'ready', reservationId: '1118-0000' }).error, a.reservationId.endsWith('0000') ? undefined : 'not_found');
+  const f1 = e.ctx.findBookings_('7788'), f2 = e.ctx.findBookings_('짧은번호'), f3 = e.ctx.findBookings_(short);
+  [f1, f2, f3].forEach(f => { assert.strictEqual(f.length, 1); assert.strictEqual(f[0].rid, a.reservationId); assert.strictEqual(f[0].short, short); });
+  assert.strictEqual(e.ctx.findBookings_('0000').length, 0);
+  const q = e.ctx.parseCancelInput_(short);
+  assert.strictEqual(q.rid, a.reservationId); assert.strictEqual(q.date, '2026-11-18');
+  const c = e.ctx.cancelReservation(short);
+  assert.strictEqual(c.ok, true);
+  assert.strictEqual(e.ctx.findBookings_(short)[0].status, '취소');
 });

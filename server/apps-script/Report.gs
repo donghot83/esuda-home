@@ -204,6 +204,7 @@ var CANCEL_BG = '#fde7e9', CANCEL_FG = '#c62828';
 
 function parseCancelInput_(input) {
   var s = String(input || '').trim().toUpperCase();
+  if (/^\d{4}-[A-Z0-9]{4}$/.test(s)) s = resolveRid_(s) || s;   // 2026-11-17: 짧은 번호(1118-4829)
   var m = /^ESD-\d{6}-[A-Z0-9]{4}$/.exec(s);
   if (m) return { rid: s, date: '20' + s.slice(4, 6) + '-' + s.slice(6, 8) + '-' + s.slice(8, 10) };
   var R = rules_(), today = R.todayKST(new Date());
@@ -283,7 +284,7 @@ function cancelsFor_(date) {
 
 function menuCancel_() {
   var ui = SpreadsheetApp.getUi();
-  var p = ui.prompt('예약 취소', '예약번호(예: ESD-261116-AB12) 또는 날짜와 번호(예: 11/16 3)를 넣어 주세요.\n카톡으로 받은 예약은 날짜와 번호로 넣으면 돼요.', ui.ButtonSet.OK_CANCEL);
+  var p = ui.prompt('예약 취소', '예약번호(예: 1118-4829) 또는 날짜와 장부 번호(예: 11/18 3)를 넣어 주세요.\n카톡으로 받은 예약은 날짜와 번호로 넣으면 돼요. 번호를 모르면 메뉴 「예약 찾기」.', ui.ButtonSet.OK_CANCEL);
   if (p.getSelectedButton() !== ui.Button.OK) return;
   var input = p.getResponseText().trim(), q = parseCancelInput_(input);
   if (!q) { ui.alert('예약번호 또는 "11/16 3" 처럼 넣어 주세요.'); return; }

@@ -110,7 +110,7 @@ function logError_(where, err) {
 }
 
 function rand4_() {
-  var a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+  var a = '0123456789', s = '';   // 2026-11-17: 숫자만
   for (var i = 0; i < 4; i++) s += a.charAt(Math.floor(Math.random() * a.length));
   return s;
 }

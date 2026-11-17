@@ -231,16 +231,21 @@
     };
   }
 
-  /** 예약번호: ESD-YYMMDD-XXXX (수거일 + 4자리) */
+  /** 예약번호: ESD-YYMMDD-XXXX (수거일 + 4자리). 2026-11-17부터 새 예약의 4자리는 숫자만 */
   function reservationId(dateStr, rand4) {
     return 'ESD-' + dateStr.slice(2).replace(/-/g, '') + '-' + rand4;
+  }
+  /** 고객에게 보여 주는 짧은 번호: ESD-261118-4829 → 1118-4829 (안쪽 번호는 그대로) */
+  function shortId(rid) {
+    var m = /^ESD-\d{2}(\d{4})-([A-Z0-9]{4})$/.exec(String(rid || '').toUpperCase().trim());
+    return m ? m[1] + '-' + m[2] : String(rid || '');
   }
 
   return {
     CONFIG: CONFIG, PARITY: PARITY, ZONES: ZONES, EXCEPTIONS: EXCEPTIONS,
     BANKS: BANKS, AMOUNTS: AMOUNTS, AMOUNT_OTHER: AMOUNT_OTHER, PLACES: PLACES, ENTRANCE: ENTRANCE, PHOTO_MODES: PHOTO_MODES, PHOTO_MAX: PHOTO_MAX,
     classifyAddress: classifyAddress, checkDate: checkDate, calendar: calendar, closureFor: closureFor,
-    validateApplication: validateApplication, reservationId: reservationId,
+    validateApplication: validateApplication, reservationId: reservationId, shortId: shortId,
     todayKST: todayKST, hourKST: hourKST, addDays: addDays, parseYmd: parseYmd, digits: digits
   };
 });

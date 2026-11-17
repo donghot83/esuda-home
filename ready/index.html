@@ -36,12 +36,13 @@ a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-
   var C = window.ESUDA_APPLY || {}, kakao = C.kakaoUrl || 'https://pf.kakao.com/_DxoHVG/chat';
   var id = (new URLSearchParams(location.search).get('id') || '').toUpperCase().trim();
   var box = document.getElementById('box');
+  var OKID = /^(ESD-\d{6}-[A-Z0-9]{4}|\d{4}-[A-Z0-9]{4})$/;   // 2026-11-17: 짧은 번호(1118-4829)도
   function show(ok, title, msg) {
     box.innerHTML = '<div class="ic' + (ok ? '' : ' bad') + '">' + (ok ? '✓' : '!') + '</div><h1>' + title + '</h1>' +
-      (/^ESD-\d{6}-[A-Z0-9]{4}$/.test(id) ? '<span class="id">예약번호 ' + id + '</span>' : '') +
+      (OKID.test(id) ? '<span class="id">예약번호 ' + id + '</span>' : '') +
       '<p>' + msg + '</p><a class="btn" href="' + kakao + '">카카오채널로 문의하기</a>';
   }
-  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(id) || !C.apiUrl) { show(false, '예약번호를 확인하지 못했어요', '알림톡의 [준비 완료] 버튼으로 다시 들어와 주세요.<br>계속 안 되면 카카오채널로 "준비 완료"라고 보내 주세요.'); return; }
+  if (!OKID.test(id) || !C.apiUrl) { show(false, '예약번호를 확인하지 못했어요', '알림톡의 [준비 완료] 버튼으로 다시 들어와 주세요.<br>계속 안 되면 카카오채널로 "준비 완료"라고 보내 주세요.'); return; }
   var tries = 0;
   (function send() {
     // 2026-11-16: keepalive 를 쓰면 서버엔 기록되는데 응답이 안 와서 화면이 계속 돌던 문제 → 일반 요청 + 20초 제한
