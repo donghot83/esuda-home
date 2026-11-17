@@ -11,13 +11,18 @@ const PORT = +process.env.PORT || 8787;
 // 기사님 화면 미리보기용 가상 장부 (가상 데이터만) — 기사님 코드: LOCALTEST1
 const D = s => new Date(s + 'T00:00:00+09:00');
 const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-const env = createEnv({ staffToken: 'local-test-token', props: { DRIVER_KEY: 'LOCALTEST1' },
+const yday = new Date(Date.now() + 9 * 3600e3 - 864e5).toISOString().slice(0, 10);
+const env = createEnv({ staffToken: 'local-test-token', props: { DRIVER_KEY: 'LOCALTEST1', WEIGH_KEY: 'LOCALWEIGH1' },
   geo: { '서울 은평구 가상로 12 301호': [37.6027, 126.9291], '서울 마포구 가상북로 5 2층': [37.5663, 126.9019], '서울 모래내로3길 7': [37.5649, 126.9050] }, ledger: {
   [(+today.slice(5, 7)) + '월 매입금액']: [
     [null, '날짜', '이름', '지역구', '주소', '무게', '로스', '최종', '금액', '로스금액', null],
     [null, D(today), '가상카톡', '은평구', '가상로 12 301호', null, null, null, null, null, '카톡 예약 / 비번 #1234'],
     [null, D(today), '가상직원', '마포구', '가상북로 5 2층', null, null, null, null, null, ''],
-    [null, D(today), '가상취소', '서대문구', '가상로 9', null, null, null, null, null, '[취소 11/15 17:20] 카톡 예약']
+    [null, D(today), '가상취소', '서대문구', '가상로 9', null, null, null, null, null, '[취소 11/15 17:20] 카톡 예약'],
+    // 계량 화면 미리보기용 (어제 수거분, 계량 코드: LOCALWEIGH1)
+    [1, D(yday), '가상하나', '은평구', '가상로 1', 32, null, null, null, null, '카톡 예약'],
+    [2, D(yday), '가상둘', '마포구', '가상로 2', null, null, null, null, null, ''],
+    [3, D(yday), '가상셋', '서대문구', '가상로 3', 18.5, 2, null, null, null, '']
   ] } });
 env.get({ action: 'schedule' }); // 시트 만들기
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };

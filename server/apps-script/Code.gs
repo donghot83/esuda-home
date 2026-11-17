@@ -145,7 +145,13 @@ function doPost(e) {
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
     if (body.action === 'driverPhoto') return json_(driverPhoto_(body));   // 2026-11-16 기사님 수거 사진
-    if (body.action === 'pickupPhoto') return json_(pickupPhoto_(body));   // 고객 '수거 사진 보기' (사진코드로만)
+    if (body.action === 'pickupPhoto') return json_(pickupPhoto_(body));
+    if (body.action === 'weighList') return json_(weighList_(body));     // 2026-11-17 계량 화면 (계량 코드 필요)
+    if (body.action === 'weighSave') return json_(weighSave_(body));
+    if (body.action === 'lossSave') return json_(lossSave_(body));
+    if (body.action === 'weighPhoto') return json_(weighPhoto_(body));
+    if (body.action === 'weighPhotoDel') return json_(weighPhotoDel_(body));
+    if (body.action === 'weighThumbs') return json_(weighThumbs_(body));   // 고객 '수거 사진 보기' (사진코드로만)
     if (body.action === 'pending') return json_(pending_(body.token));   // 토큰은 URL이 아니라 본문으로만
     if (body.action === 'markSynced') return json_(markSynced_(body.token, body.ids));
     return json_({ ok: false, error: 'unknown_action' });

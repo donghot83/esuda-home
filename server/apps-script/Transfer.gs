@@ -99,6 +99,8 @@ function makeTransferFile(opts) {
       if (!lr) { if (!notYet) skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
       var pa = payAmount_(lr, unit);
       if (!pa.ok) { if (!notYet) skipped.push({ 예약번호: rid, 이유: pa.reason }); continue; }
+      // 2026-11-17: 계량 화면으로 계량했는데 로스를 아직 확인 안 했으면 이번 이체에서 뺌
+      if (typeof weighLossPending_ === 'function' && weighLossPending_(date, rid)) { skipped.push({ 예약번호: rid, 이유: '로스 미정 — 계량 화면 로스 탭에서 확인해 주세요' }); continue; }
       if (pa.amount <= 0) { free++; marks.push({ row: i + 1, file: '', state: '무상수거', rid: rid, lr: lr }); continue; }
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
@@ -163,6 +165,8 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('이수다')
       .addItem('예약 찾기 (이름·연락처 뒤4자리·번호)', 'menuFindBooking_')
+      .addItem('정산 검토표 만들기 (날짜별 무게·로스·사진)', 'menuSettleReview_')
+      .addItem('계량 화면 코드 보기·바꾸기', 'menuWeighKey_')
       .addItem('예약 취소 (예약번호 또는 날짜 번호)', 'menuCancel_')
       .addItem('동선 짜기 (번호 확정)', 'menuRoute_')
       .addItem('현황판 새로 고침', 'menuDashboard_')

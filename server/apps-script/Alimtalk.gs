@@ -22,7 +22,8 @@ var SHEET_ALIM = '알림톡기록';
 var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picked: { prop: 'TPL_PICKED', label: '픽업 완료' },
   paid: { prop: 'TPL_PAID', label: '입금 예정' }, free: { prop: 'TPL_FREE', label: '무상수거' },
   sameday: { prop: 'TPL_SAMEDAY', label: '당일 안내' },
-  pickedPhoto: { prop: 'TPL_PICKED_PHOTO', label: '픽업 완료(사진)' } }; // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
+  pickedPhoto: { prop: 'TPL_PICKED_PHOTO', label: '픽업 완료(사진)', opt: true },
+  paidPhoto: { prop: 'TPL_PAID_PHOTO', label: '입금 예정(사진)', opt: true } }; // 2026-11-17 [계량 사진 보기] 버튼·로스 차감 줄 // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
 
 function alimConf_() {
   var p = PropertiesService.getScriptProperties();
@@ -113,9 +114,16 @@ function alimSettled_(rid, lr, amount) {
   if (!r) return { ok: false, skipped: 'no_booking' };
   var w = (+lr.weight || 0) - (+lr.loss || 0);
   if (amount > 0) {
-    return sendAlimtalk_('paid', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
+    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid)) return { ok: true, skipped: 'already' };
+    var vars = { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
       '#{무게}': String(w), '#{단가}': String(transferUnitPrice_()), '#{금액}': Number(amount).toLocaleString('ko-KR'),
-      '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) });
+      '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) };
+    // 2026-11-17: 계량 사진이 있고 사진 템플릿이 있으면 [계량 사진 보기] 버튼·로스 차감 줄 있는 것으로
+    if (alimConf_().tpl('paidPhoto') && typeof weighPhotos_ === 'function' && weighPhotos_(null, rid).length) {
+      vars['#{로스}'] = String(+lr.loss || 0); vars['#{로스단가}'] = String(lossUnitPrice_()); vars['#{사진코드}'] = pickPhotoCode_(rid, true);
+      return sendAlimtalk_('paidPhoto', rid, r.get('연락처'), vars);
+    }
+    return sendAlimtalk_('paid', rid, r.get('연락처'), vars);
   }
   return sendAlimtalk_('free', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{무게}': String(w) });
 }
@@ -125,7 +133,7 @@ function alimStatus_() {
   var c = alimConf_(), miss = [];
   if (!c.key || !c.secret) miss.push('API 키');
   if (!c.pfId) miss.push('카카오채널 연결(PFID)');
-  Object.keys(ALIM_KINDS).forEach(function (k) { if (!c.tpl(k)) miss.push(ALIM_KINDS[k].label + ' 템플릿'); });
+  Object.keys(ALIM_KINDS).forEach(function (k) { if (!c.tpl(k) && !ALIM_KINDS[k].opt) miss.push(ALIM_KINDS[k].label + ' 템플릿'); });
   return { on: c.on, missing: miss };
 }
 

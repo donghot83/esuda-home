@@ -225,11 +225,17 @@ function pickupPhoto_(b) {
   if (cC < 0) return { ok: false, error: 'not_found' };
   for (var i = 1; i < bk.data.length; i++) {
     if (String(bk.data[i][cC]) !== code) continue;
-    var rid = String(bk.data[i][bk.col('예약번호')]), photos = [];
-    pickPhotos_(null, rid).slice(0, PICKPHOTO_MAX).forEach(function (fid) {
-      try { photos.push(Utilities.base64Encode(DriveApp.getFileById(fid).getBlob().getBytes())); } catch (e) {}
-    });
-    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos };
+    var rid = String(bk.data[i][bk.col('예약번호')]), photos = [], weigh = [], loss = [];
+    var b64 = function (fid) { try { return Utilities.base64Encode(DriveApp.getFileById(fid).getBlob().getBytes()); } catch (e) { return ''; } };
+    pickPhotos_(null, rid).slice(0, PICKPHOTO_MAX).forEach(function (fid) { var d = b64(fid); if (d) photos.push(d); });
+    // 2026-11-17: 센터 계량 사진·로스 사진 (입금 예정 알림톡 [계량 사진 보기])
+    var lossKg = '';
+    if (typeof weighPhotos_ === 'function') {
+      weighPhotos_(null, rid).forEach(function (p) { var arr = p.kind === '로스' ? loss : weigh; if (arr.length < 4) { var d = b64(p.fileId); if (d) arr.push(d); } });
+      var rec = weighRecords_()[fmtDate_(bk.data[i][bk.col('수거일')]) + '|' + rid];
+      if (rec && rec.lossDone && +rec.loss > 0) lossKg = +rec.loss;
+    }
+    return { ok: true, date: R_dateLabel_(bk.data[i][bk.col('수거일')]), photos: photos, weigh: weigh, loss: loss, lossKg: lossKg };
   }
   return { ok: false, error: 'not_found' };
 }

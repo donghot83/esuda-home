@@ -21,6 +21,8 @@ p{color:var(--sub);font-size:15px;line-height:1.6;margin:0 0 8px;text-align:cent
 a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-top:18px;border-radius:12px;background:#fee500;color:#191919;font-weight:700;text-decoration:none}
 .spin{width:28px;height:28px;margin:10px auto;border:3px solid #d7e5d1;border-top-color:var(--green);border-radius:50%;animation:s 1s linear infinite}
 @keyframes s{to{transform:rotate(360deg)}}
+h2.sec{font-size:17px;margin:22px 0 4px}
+p.sm{font-size:13px;text-align:left;margin:0 0 4px}
 </style>
 </head>
 <body>
@@ -41,13 +43,26 @@ a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-
       (imgs && imgs.length ? '<div class="ph">' + imgs.map(function (d, i) { return '<img alt="수거 사진 ' + (i + 1) + '" src="data:image/jpeg;base64,' + d + '">'; }).join('') + '</div>' : '') +
       '<a class="btn" href="' + kakao + '">카카오채널로 문의하기</a>';
   }
+  function sections(title, msg, list) {
+    box.innerHTML = '<h1>' + title + '</h1><p>' + msg + '</p>' + list.filter(function (s) { return s[2].length; }).map(function (s) {
+      return '<h2 class="sec">' + s[0] + '</h2>' + (s[1] ? '<p class="sm">' + s[1] + '</p>' : '') +
+        '<div class="ph">' + s[2].map(function (d, i) { return '<img alt="' + s[0] + ' ' + (i + 1) + '" loading="lazy" src="data:image/jpeg;base64,' + d + '">'; }).join('') + '</div>';
+    }).join('') + '<a class="btn" href="' + kakao + '">카카오채널로 문의하기</a>';
+  }
   if (!/^[a-z0-9]{12}$/.test(code) || !C.apiUrl) { show('사진을 찾지 못했어요', '알림톡의 [수거 사진 보기] 버튼으로 다시 들어와 주세요.'); return; }
   var tries = 0;
   (function load() {
     fetch(C.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'pickupPhoto', code: code }) })
       .then(function (r) { return r.json(); })
       .then(function (r) {
-        if (r && r.ok && r.photos && r.photos.length) return show('수거한 물품 사진', (r.date ? r.date + ' ' : '') + '기사님이 수거하면서 찍은 사진이에요.<br>센터에서 검수 후 입금해 드려요.', r.photos);
+        // 2026-11-17: 센터 계량 사진·로스 사진이 있으면 그것부터 (입금 예정 알림톡 [계량 사진 보기])
+        var weigh = (r && r.weigh) || [], loss = (r && r.loss) || [], pick = (r && r.photos) || [];
+        if (r && r.ok && (weigh.length || loss.length)) {
+          return sections((r.date ? r.date + ' 수거분 ' : '') + '센터 계량 사진',
+            '센터에서 무게를 잰 사진이에요. 입금 예정 금액은 이 무게로 계산했어요.',
+            [['⚖️ 계량 사진', '', weigh], ['🚫 로스 사진', r.lossKg ? '매입에서 제외된 로스 ' + r.lossKg + 'kg — 오염·젖음·재활용이 어려운 의류 등' : '매입에서 제외된 물품', loss], ['🚚 수거 사진', '기사님이 수거하면서 찍은 사진', pick]]);
+        }
+        if (r && r.ok && pick.length) return show('수거한 물품 사진', (r.date ? r.date + ' ' : '') + '기사님이 수거하면서 찍은 사진이에요.<br>센터에서 검수 후 입금해 드려요.', pick);
         if (r && r.ok) return show('사진이 아직 없어요', '이번 수거는 사진 없이 진행됐어요. 궁금한 점은 카카오채널로 문의해 주세요.');
         show('사진을 찾지 못했어요', '알림톡의 [수거 사진 보기] 버튼으로 다시 들어와 주세요.');
       })
