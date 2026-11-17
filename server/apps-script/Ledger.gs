@@ -26,7 +26,8 @@ function ledgerCols_(sh, v) {
   var at = function (name) { var i = h.indexOf(name); return i >= 0 ? i + 1 : 0; };
   var x = at('무상제외') ? 1 : 0;
   var c = { no: 1, date: 2, name: 3, area: 4, addr: 5, weight: 6, excl: x ? 7 : 0,
-    loss: at('로스') || 7 + x, final: at('최종') || 8 + x, amount: at('금액') || 9 + x, lossAmt: at('로스금액') || 10 + x, memo: at('메모') || 11 + x };
+    loss: at('로스') || 7 + x, final: at('최종') || 8 + x, amount: at('금액') || 9 + x, lossAmt: at('로스금액') || 10 + x, memo: at('메모') || 11 + x,
+    phone: at('연락처') };   // 2026-11-18 카톡 예약 연락처 칸(없으면 0)
   LEDGER_COLS_CACHE_.push([sh, c]);
   return c;
 }
@@ -335,6 +336,7 @@ function syncLedgerPending() {
   // 2026-11-17: 기사님 근무 시간(15시~새벽 4시)엔 오늘·내일 기사님 목록을 미리 만들어 둠 → 화면 열면 바로
   try { if (typeof warmDriverCache_ === 'function') warmDriverCache_(new Date()); } catch (e) { logError_('기사님 목록 미리 만들기', e); }
   try { if (typeof sendPendingPickups_ === 'function') sendPendingPickups_(new Date()); } catch (e) { logError_('픽업 완료 대기 발송', e); }
+  try { if (typeof kakaoIntake_ === 'function') kakaoIntake_(new Date()); } catch (e) { logError_('카톡 예약 연락처 등록', e); }   // 2026-11-18
   return res;
 }
 

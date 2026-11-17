@@ -105,6 +105,7 @@ function makeTransferFile(opts) {
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
       if (col('무상희망') >= 0 && String(r[col('무상희망')]) === '예') { free++; marks.push({ row: i + 1, file: '', state: '무상수거(고객 희망)', rid: rid, lr: lr }); continue; }
+      if (!acct && String(r[col('출처')]) === '카톡·직원') { skipped.push({ 예약번호: rid, 이유: '카톡 예약 — 계좌는 채팅 확인 후 따로 이체 (알림톡은 계좌 넣은 뒤 이체 파일 때)' }); continue; }
       if (!acct) { skipped.push({ 예약번호: rid, 이유: '계좌 없음 — 고객에게 계좌를 받아 예약 시트에 넣어 주세요' }); continue; }
       if (!code || acct.length < 6) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
       var holder = String(r[col('예금주')] || r[col('이름')]);
@@ -168,6 +169,7 @@ function onOpen() {
       .addItem('정산 검토표 만들기 (날짜별 무게·로스·사진)', 'menuSettleReview_')
       .addItem('계량 화면 코드 보기·바꾸기', 'menuWeighKey_')
       .addItem('장부에 무상제외 칸 추가 (한 번만)', 'menuAddExclColumns_')
+      .addItem('장부에 연락처 칸 추가 (카톡 예약 알림톡, 한 번만)', 'menuSetupKakaoPhone_')
       .addItem('예약 취소 (예약번호 또는 날짜 번호)', 'menuCancel_')
       .addItem('동선 짜기 (번호 확정)', 'menuRoute_')
       .addItem('현황판 새로 고침', 'menuDashboard_')

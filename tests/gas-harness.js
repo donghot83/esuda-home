@@ -173,6 +173,7 @@ function createEnv(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Alimtalk.gs'), 'utf8'), ctx, { filename: 'Alimtalk.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Route.gs'), 'utf8'), ctx, { filename: 'Route.gs' });
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Weigh.gs'), 'utf8'), ctx, { filename: 'Weigh.gs' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'server/apps-script/Kakao.gs'), 'utf8'), ctx, { filename: 'Kakao.gs' });
   const call = (fn, arg) => JSON.parse(ctx[fn](arg).text);
   return {
     ctx, sheets, ledger: ledgerSheets, otherLedgers, props, created, drive, mails, fetches,
