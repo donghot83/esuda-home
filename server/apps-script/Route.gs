@@ -30,11 +30,16 @@ var SHEET_GEO = '좌표';
 function inMetro_(lat, lng) { return lat > 37.35 && lat < 37.80 && lng > 126.60 && lng < 127.25; }
 
 /** 주소 → {lat, lng, src:'지도'|'구청'|''} (좌표 탭에 저장) */
+// 2026-11-17 속도: 좌표 탭을 사람마다 다시 읽던 것(18명이면 18번) → 한 번 읽어 기억
+var GEO_MEMO_ = null;
 function geocode_(query, area) {
   query = String(query || '').replace(/\s+/g, ' ').trim();
   var sh = sheet_(SHEET_GEO, ['주소', '위도', '경도', '출처', '시각']);
-  var v = sh.getDataRange().getValues();
-  for (var i = 1; i < v.length; i++) if (String(v[i][0]) === query && +v[i][1]) return { lat: +v[i][1], lng: +v[i][2], src: String(v[i][3]) };
+  if (!GEO_MEMO_) {
+    GEO_MEMO_ = {};
+    sh.getDataRange().getValues().slice(1).forEach(function (r) { if (+r[1] && !GEO_MEMO_[String(r[0])]) GEO_MEMO_[String(r[0])] = { lat: +r[1], lng: +r[2], src: String(r[3]) }; });
+  }
+  if (GEO_MEMO_[query]) return GEO_MEMO_[query];
   var out = null;
   try {
     var res = Maps.newGeocoder().setRegion('kr').setLanguage('ko').geocode(query);
@@ -43,9 +48,11 @@ function geocode_(query, area) {
       out = { lat: r.geometry.location.lat, lng: r.geometry.location.lng, src: '지도' };
     }
   } catch (e) { logError_('좌표 찾기', e); }
-  if (out) { sh.appendRow([query, out.lat, out.lng, out.src, Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm')]); return out; }
-  var gu = guCenter_(query, area);
-  return gu ? { lat: gu[0], lng: gu[1], src: '구청' } : { lat: 0, lng: 0, src: '' };
+  if (!out) { var gu = guCenter_(query, area); if (gu) out = { lat: gu[0], lng: gu[1], src: '구청' }; } // 못 찾은 곳도 저장 → 매번 지도 검색 안 함
+  if (!out) return { lat: 0, lng: 0, src: '' };
+  sh.appendRow([query, out.lat, out.lng, out.src, Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm')]);
+  GEO_MEMO_[query] = out;
+  return out;
 }
 
 function guCenter_(query, area) {
@@ -152,6 +159,7 @@ function routeDate(date, opts) {
     renumberLedgerDate_(sh, date, tz);
     var stamp = Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM/dd HH:mm');
     PropertiesService.getScriptProperties().setProperty(routeKey_(date), stamp);
+    driverCacheClear_(date);
     res.msg = dayLabel_(date) + ' 동선 확정: ' + an.from.name + ' → ' + an.to.name + ', ' + live.length + '곳, 약 ' + res.km + 'km';
     return res;
   } finally { lock.releaseLock(); }

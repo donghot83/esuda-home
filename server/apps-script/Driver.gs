@@ -48,11 +48,28 @@ function driverStatus_(date) {
   return out;
 }
 
-/** {action:'driverList', key, date?} → 그날 수거 목록 */
+/* 2026-11-17 속도: 만든 목록을 서버 캐시에 1분 보관 (같은 날 다시 열기·날짜 넘기기 즉시).
+ * 완료·사진·준비완료·장부 추가 때 그날 것을 지우고, [새로고침]은 항상 새로 만든다(fresh). */
+var DRIVER_CACHE_SEC = 60;
+function driverCacheClear_(date) { try { CacheService.getScriptCache().remove('drv_' + fmtDate_(date)); } catch (e) {} }
+
+/** {action:'driverList', key, date?, fresh?} → 그날 수거 목록 */
 function driverList_(b) {
   if (!checkDriverKey_(b.key)) return { ok: false, error: 'forbidden' };
   var R = rules_(), now = new Date();
   var date = R.parseYmd(String(b.date || '')) ? String(b.date) : driverDefaultDate_(now);
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) {}
+  if (cache && !b.fresh) {
+    var hit = cache.get('drv_' + date);
+    if (hit) { try { var o = JSON.parse(hit); o.cached = true; return o; } catch (e) {} }
+  }
+  var out = driverListBuild_(date, R);
+  if (cache) { try { var js = JSON.stringify(out); if (js.length < 95000) cache.put('drv_' + date, js, DRIVER_CACHE_SEC); } catch (e) {} }
+  return out;
+}
+
+function driverListBuild_(date, R) {
   var items = [];
   var lss = ledgerOpen_(date), sh = lss && ledgerMonthSheet_(lss, date);
   var book = bookData_(), byRid = {};
@@ -115,6 +132,7 @@ function driverMark_(b) {
   if (!rules_().parseYmd(date) || !id || ['완료', '못함', ''].indexOf(state) < 0) return { ok: false, error: 'bad_request' };
   sheet_(SHEET_DRIVER, DRIVER_LOG_HEADERS)  // 한 줄 추가라 잠금 없이 (신청을 막지 않게)
     .appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
+  driverCacheClear_(date);
   // 픽업 완료 알림톡 (신청페이지 예약만, 같은 예약은 한 번만)
   if (state === '완료' && /^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) { try { alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); } }
   return { ok: true };
@@ -194,6 +212,7 @@ function driverPhoto_(b) {
   var tag = rid || (name.replace(/[^0-9A-Za-z가-힣]/g, '').slice(0, 20) || '카톡');
   var file = photoFolder_().createFile(Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', '수거_' + date + '_' + tag + '_' + (n + 1) + '.jpg'));
   sheet_(SHEET_PICKPHOTO, PICKPHOTO_HEADERS).appendRow([date, id, name, file.getId(), Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
+  driverCacheClear_(date);
   if (rid) { try { pickPhotoCode_(rid, true); } catch (e) { logError_('수거사진 코드', e); } }
   return { ok: true, count: n + 1 };
 }

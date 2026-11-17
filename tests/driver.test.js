@@ -87,3 +87,19 @@ test('기사님 지도: 좌표와 출발지, 확정 전엔 동선 미리보기 �
   assert.strictEqual(r2.preview, false);
   assert.strictEqual(JSON.stringify(r2.items.map(x => x.no + x.name)), JSON.stringify(['1덕양손님', '2은평손님']));
 });
+
+test('2026-11-17 속도: 목록 1분 캐시 — 다시 열면 캐시, 새로고침(fresh)·완료 누름 뒤엔 새로 만듦', () => {
+  const L = { '11월 매입금액': [HEAD, [null, D('2026-11-16'), '캐시손님', '은평구', '가상로 7']] };
+  const env = createEnv({ now: NOW, ledger: L, props: { DRIVER_KEY: 'GOODKEY123' } });
+  const q = o => post(env, Object.assign({ action: 'driverList', key: 'GOODKEY123', date: '2026-11-16' }, o));
+  assert.ok(!q().cached);
+  assert.strictEqual(q().cached, true);
+  env.ledger['11월 매입금액'].rows.push([null, D('2026-11-16'), '새손님', '마포구', '가상로 9']);
+  assert.strictEqual(q().items.length, 1);              // 캐시(1분 안)
+  assert.strictEqual(q({ fresh: true }).items.length, 2); // 새로고침은 최신
+  const id = q().items[0].id;
+  post(env, { action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id, state: '완료' });
+  const r = q();
+  assert.ok(!r.cached); assert.strictEqual(r.items.find(x => x.id === id).state, '완료');
+  assert.strictEqual(q({ key: 'BAD' }).error, 'forbidden');   // 캐시가 있어도 코드 확인 먼저
+});

@@ -143,6 +143,7 @@ function ready_(b) {
     var date = fmtDate_(data[i][cD]);
     if (String(data[i][cR] || '')) return { ok: true, already: true, date: date };
     sh.getRange(i + 1, cR + 1).setValue(Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));
+    driverCacheClear_(date);
     return { ok: true, date: date };
   }
   return { ok: false, error: 'not_found' };

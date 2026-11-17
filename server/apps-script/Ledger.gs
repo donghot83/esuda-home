@@ -165,6 +165,7 @@ function ledgerAppend_(c, rid) {
   sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
   sh.getRange(at, LEDGER_COL.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
   try { setLedgerCalc_(sh, at); } catch (e) { logError_('장부 수식', e); }
+  driverCacheClear_(c.date);
   try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
   bumpLedgerCount_(c.date, 1);
   return { ok: true, row: at };
@@ -177,6 +178,7 @@ function ledgerAppend_(c, rid) {
 function renumberLedgerDate_(sh, dateStr, tz) {
   if (!sh) return 0;
   var v = sh.getDataRange().getValues(), n = 0;
+  driverCacheClear_(dateStr);
   for (var i = 1; i < v.length; i++) {
     if (cellYmd_(v[i][LEDGER_COL.date - 1], tz) !== dateStr) continue;
     if (!String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;

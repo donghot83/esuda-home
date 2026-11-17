@@ -79,6 +79,7 @@ function makeSpreadsheet(name) {
 function createEnv(opts = {}) {
   const sheets = {};
   const props = { STAFF_TOKEN: opts.staffToken || 'test-token' };
+  const cache = {};
   if (opts.ledger) props.LEDGER_ID = 'LEDGER';
   Object.assign(props, opts.props || {});
   if (opts.notify) props.NOTIFY_EMAILS = opts.notify;
@@ -110,6 +111,7 @@ function createEnv(opts = {}) {
     },
     LockService: { getScriptLock: () => ({ tryLock: () => (locked ? false : (locked = true)), releaseLock: () => { locked = false; } }),
       getDocumentLock: () => ({ tryLock: () => (docLocked ? false : (docLocked = true)), releaseLock: () => { docLocked = false; } }) },
+    CacheService: { getScriptCache: () => ({ get: k => (cache[k] == null ? null : cache[k]), put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     DriveApp: {
       getFolderById: id => { const f = drive.folders[id]; if (!f) throw new Error('no folder'); return f; },

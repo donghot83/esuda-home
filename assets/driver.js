@@ -27,15 +27,35 @@
     $('keyInput').value = '';
   }
 
-  function fetchList(date) {
-    if (st.busy) return;
-    st.busy = true; $('msg').textContent = '불러오는 중…';
-    post({ action: 'driverList', key: st.key, date: date || '' }).then(function (r) {
+  /* 2026-11-17 속도: 본 날짜는 이 화면(메모리)에 기억 → 날짜 넘기면 바로 보여 주고 뒤에서 최신으로 바꿈.
+   * 앞뒤 날짜는 미리 받아 둠. 휴대폰 저장소에는 고객 정보를 남기지 않음(메모리만). */
+  var mem = {}, seq = 0;
+  function prefetch(date) {
+    [-1, 1].forEach(function (k) {
+      var d = addDays(date, k);
+      if (mem[d]) return;
+      post({ action: 'driverList', key: st.key, date: d }).then(function (r) { if (r && r.ok && !mem[r.date]) mem[r.date] = r; }).catch(function () {});
+    });
+  }
+  function fetchList(date, fresh) {
+    var my = ++seq;
+    if (date && mem[date] && !fresh) { show(mem[date]); $('msg').textContent = ''; }
+    else $('msg').textContent = '불러오는 중…';
+    st.busy = true;
+    post({ action: 'driverList', key: st.key, date: date || '', fresh: !!fresh }).then(function (r) {
+      if (my !== seq) return;   // 그사이 다른 날짜를 눌렀으면 버림
       st.busy = false;
       if (!r.ok) {
         if (r.error === 'forbidden') { save(KEY_STORE, ''); st.key = ''; showKey('코드가 맞지 않아요. 대표님께 새 코드를 받아 주세요.'); return; }
         $('msg').textContent = '목록을 못 불러왔어요. 잠시 뒤 새로고침해 주세요.'; return;
       }
+      mem[r.date] = r;
+      show(r);
+      prefetch(r.date);
+    }).catch(function () { if (my !== seq) return; st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });
+  }
+
+  function show(r) {
       $('keyView').hidden = true; $('listView').hidden = false; $('btnRefresh').hidden = false;
       st.date = r.date; st.items = r.items; st.start = r.start; st.preview = r.preview;
       st.items.forEach(function (it, i) { it._i = i; });
@@ -43,7 +63,6 @@
       $('dayZone').textContent = r.weekend ? '주말 휴무' : (r.route || r.zone + ' · 동선 확정 전(17시)');
       $('msg').textContent = !r.ledger ? '장부에 이 달 시트가 없어요.' : (r.items.length ? '' : '이날 수거 예약이 없어요.');
       render();
-    }).catch(function () { st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });
   }
 
   function sorted() {
@@ -199,7 +218,7 @@
   });
   $('btnPrev').addEventListener('click', function () { fetchList(addDays(st.date, -1)); });
   $('btnNext').addEventListener('click', function () { fetchList(addDays(st.date, 1)); });
-  $('btnRefresh').addEventListener('click', function () { fetchList(st.date); });
+  $('btnRefresh').addEventListener('click', function () { fetchList(st.date, true); });   // 새로고침은 서버 캐시 없이 최신
   $('btnLogout').addEventListener('click', function () { save(KEY_STORE, ''); st.key = ''; showKey(''); });
   $('btnKey').addEventListener('click', function () {
     var k = $('keyInput').value.replace(/\s+/g, '').toUpperCase();
