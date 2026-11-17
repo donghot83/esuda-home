@@ -89,6 +89,13 @@ function weighPhotos_(date, id, kind) {
   });
   return out;
 }
+/** 무상 희망(신청 때 '계좌 없이 무상' 체크) 예약번호 모음 — 2026-11-17 대표 결정: 사진·로스 없이 무게만, 무상수거 알림톡만 */
+function freeWishSet_() {
+  var b = bookData_(), c = b.col('무상희망'), out = {};
+  if (c < 0) return out;
+  for (var i = 1; i < b.data.length; i++) if (String(b.data[i][c]) === '예') out[String(b.data[i][b.col('예약번호')])] = true;
+  return out;
+}
 function weighNow_() { return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'); }
 function weighNum_(x) { var s = String(x == null ? '' : x).replace(/[^0-9.]/g, ''); return s === '' ? NaN : +s; }
 function sameKg_(a, b) { return Math.abs(+a - +b) < 0.001; }
@@ -97,7 +104,7 @@ function sameKg_(a, b) { return Math.abs(+a - +b) < 0.001; }
 function weighList_(b) {
   if (!checkWeighKey_(b.key)) return { ok: false, error: 'forbidden' };
   var R = rules_(), date = R.parseYmd(String(b.date || '')) ? String(b.date) : R.addDays(R.todayKST(new Date()), -1);
-  var L = weighLedgerRows_(date), recs = weighRecords_(), pc = {};
+  var L = weighLedgerRows_(date), recs = weighRecords_(), pc = {}, free = freeWishSet_();
   var ps = ss_().getSheetByName(SHEET_WEIGH_PHOTO);
   if (ps) ps.getDataRange().getValues().slice(1).forEach(function (r) {
     if (fmtDate_(r[0]) !== date) return;
@@ -108,7 +115,7 @@ function weighList_(b) {
     var num = function (v) { return v === '' || v == null || isNaN(+v) ? '' : +v; };
     return { id: x.id, rid: x.rid ? shortRid_(x.rid) : '', no: x.no, name: x.name, area: x.area, cancelled: x.cancelled,
       ledgerWeight: num(x.weight), ledgerLoss: num(x.loss), amount: typeof x.amount === 'number' ? x.amount : String(x.amount || ''),
-      bags: rec.bags === '' || rec.bags == null ? '' : +rec.bags, weighed: !!rec.at, lossDone: !!rec.lossDone, loss: num(rec.loss),
+      bags: rec.bags === '' || rec.bags == null ? '' : +rec.bags, weighed: !!rec.at, lossDone: !!rec.lossDone, loss: num(rec.loss), free: !!(x.rid && free[x.rid]),
       photos: pc[x.id] || { 계량: 0, 로스: 0 } };
   });
   return { ok: true, date: date, label: R_dateLabel_(date), ledger: !!L.sh, items: items };
@@ -169,6 +176,7 @@ function weighPhoto_(b) {
   var data = String(b.data || '').replace(/^data:image\/\w+;base64,/, '');
   if (!rules_().parseYmd(date) || !id) return { ok: false, error: 'bad_request' };
   if (!data || data.length > PHOTO_MAX_B64) return { ok: false, error: 'too_large' };
+  if (freeWishSet_()[id]) return { ok: false, error: 'free' };   // 무상 희망 고객은 사진 안 올림
   var have = weighPhotos_(date, id, kind).length;
   if (have >= WEIGH_PHOTO_MAX) return { ok: false, error: 'too_many' };
   var rec = weighRecords_()[date + '|' + id] || {}, name = String(b.name || rec.name || '').replace(/[\\/:*?"<>|]/g, '').slice(0, 20);
@@ -206,6 +214,7 @@ function weighThumbs_(b) {
 
 /** 이체 파일용: 계량 화면으로 계량했는데 로스 확인 전이면 true */
 function weighLossPending_(date, rid) {
+  if (freeWishSet_()[rid]) return false;   // 무상 희망은 로스 필요 없음
   var rec = weighRecords_()[date + '|' + rid];
   return !!(rec && rec.at && !rec.lossDone);
 }
@@ -213,7 +222,7 @@ function weighLossPending_(date, rid) {
 /* ===== ③ 정산 검토표 (메뉴) ===== */
 /** dates: ['2026-11-16', …] → 검토표 줄 [{…, 경고}] */
 function settleReview_(dates) {
-  var recs = weighRecords_(), out = [], book = bookData_(), byRid = {};
+  var recs = weighRecords_(), out = [], book = bookData_(), byRid = {}, free = freeWishSet_();
   for (var j = 1; j < book.data.length; j++) byRid[String(book.data[j][book.col('예약번호')])] = book.data[j];
   var ps = ss_().getSheetByName(SHEET_WEIGH_PHOTO), pc = {};
   if (ps) ps.getDataRange().getValues().slice(1).forEach(function (r) {
@@ -224,7 +233,9 @@ function settleReview_(dates) {
       var rec = recs[date + '|' + x.id] || {}, p = pc[date + '|' + x.id] || { 계량: 0, 로스: 0 }, warn = [];
       var br = x.rid && byRid[x.rid], phone = br ? String(br[book.col('연락처')] || '') : '';
       var w = +x.weight, l = +x.loss || 0;
+      var isFree = !!(x.rid && free[x.rid]);
       if (x.cancelled) warn.push('취소');
+      else if (isFree) { if (!(w > 0)) warn.push('무게 없음'); }   // 무상 희망: 무게만 있으면 됨
       else {
         if (!(w > 0)) warn.push('무게 없음');
         else if (w < 1 || w > 300) warn.push('무게 확인');
@@ -233,9 +244,9 @@ function settleReview_(dates) {
         if (rec.at && !rec.lossDone) warn.push('로스 미정');
         if (l > 0 && !p.로스) warn.push('로스 사진 없음');
       }
-      out.push({ '수거일': date, '번호': x.no + (rec.bags !== '' && rec.bags != null ? '-' + rec.bags : ''), '이름': x.name, '구분': x.rid ? '신청페이지' : '카톡·직원',
+      out.push({ '수거일': date, '번호': x.no + (rec.bags !== '' && rec.bags != null ? '-' + rec.bags : ''), '이름': x.name, '구분': x.rid ? (isFree ? '신청페이지(무상 희망)' : '신청페이지') : '카톡·직원',
         '무게': x.weight, '로스': x.loss, '금액': x.amount, '계량사진': p.계량, '로스사진': p.로스, '로스확인': rec.lossDone ? '확인' : (rec.at ? '미정' : '-'),
-        '알림톡': x.rid && /^01\d{8,9}$/.test(phone.replace(/[^0-9]/g, '')) ? '보냄' : '안 감(연락처 없음)', '경고': warn.join(', ') });
+        '알림톡': x.rid && /^01\d{8,9}$/.test(phone.replace(/[^0-9]/g, '')) ? (isFree ? '무상수거 안내' : '보냄') : '안 감(연락처 없음)', '경고': warn.join(', ') });
     });
   });
   return out;

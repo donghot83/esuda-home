@@ -134,3 +134,23 @@ test('정산 검토표: 사진 없음·로스 미정·장부와 계량 화면 �
   rowOf(L, id)[5] = 41;   // 누가 장부를 고침
   assert.match(e.ctx.settleReview_(['2026-11-16']).find(x => x['이름'] === '계량고객')['경고'], /장부 무게가 계량 화면과 다름/);
 });
+
+test('2026-11-17 무상 희망 고객: 목록에 표시, 사진 업로드 거절, 로스 없이도 이체 파일에서 무상수거 알림톡만', () => {
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-16', name: '무상고객', noPay: true, bank: '', account: '', holder: '', amount: R.AMOUNTS[0] }));
+  assert.strictEqual(a.ok, true, JSON.stringify(a));
+  const e = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD] }, props: READY });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  const id = a.reservationId;
+  const it = q(e, { action: 'weighList' }).items.find(x => x.name === '무상고객');
+  assert.strictEqual(it.free, true);
+  assert.strictEqual(q(e, { action: 'weighPhoto', id, kind: '계량', data: IMG }).error, 'free');
+  assert.strictEqual(q(e, { action: 'weighSave', id, bags: 1, weight: 8 }).ok, true);
+  const rv = e.ctx.settleReview_(['2026-11-16']).find(x => x['이름'] === '무상고객');
+  assert.strictEqual(rv['경고'], ''); assert.strictEqual(rv['알림톡'], '무상수거 안내');
+  const r = e.ctx.makeTransferFile();
+  assert.strictEqual(r.count, 0); assert.strictEqual(r.free, 1);
+  assert.ok(!r.skipped.some(s => /로스 미정/.test(s.이유)));
+  assert.ok(e.fetches.some(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE'));
+});

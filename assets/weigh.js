@@ -42,7 +42,7 @@
   }
 
   function live() { return st.items.filter(function (x) { return !x.cancelled; }); }
-  function lossTargets() { return live().filter(function (x) { return x.weighed || x.ledgerWeight > 0; }); }
+  function lossTargets() { return live().filter(function (x) { return !x.free && (x.weighed || x.ledgerWeight > 0); }); }   // 무상 희망은 로스 없음
 
   function render() {
     var L = live(), w = L.filter(function (x) { return x.weighed; }).length, lt = lossTargets(), ld = lt.filter(function (x) { return x.lossDone; }).length;
@@ -69,19 +69,21 @@
   function weighCard(it) {
     var id = esc(it.id);
     if (it.cancelled) return '<li class="wg-item cx"><div class="wg-row"><span class="wg-lab">' + esc(it.no || '?') + '</span><span class="wg-name">' + esc(it.name) + '</span><span class="wg-st">취소</span></div></li>';
-    var ok = it.weighed && it.photos.계량 > 0;
+    var ok = it.weighed && (it.free || it.photos.계량 > 0);
     var stat = it.weighed ? '<b class="good">' + kg(it.ledgerWeight) + ' ✓</b>' : (it.ledgerWeight !== '' ? '<span>장부 ' + kg(it.ledgerWeight) + '</span>' : '<span class="warn">무게 전</span>');
-    stat += '<br>' + (it.photos.계량 ? '📷 ' + it.photos.계량 + '장' : '<span class="warn">사진 없음</span>');
-    var html = '<li class="wg-item' + (ok ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + (it.rid ? ' · 신청 ' + esc(it.rid) : ' · 카톡·직원') + '</span></span><span class="wg-st">' + stat + '</span></button>';
+    stat += '<br>' + (it.free ? '<span class="free">무상 · 사진 없음</span>' : (it.photos.계량 ? '📷 ' + it.photos.계량 + '장' : '<span class="warn">사진 없음</span>'));
+    var html = '<li class="wg-item' + (ok ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + (it.rid ? ' · 신청 ' + esc(it.rid) : ' · 카톡·직원') + '</span>' + (it.free ? ' <span class="wg-free">무상 희망</span>' : '') + '</span><span class="wg-st">' + stat + '</span></button>';
     if (st.open === it.id) {
       var wv = it.weighed ? it.ledgerWeight : (it.ledgerWeight !== '' ? it.ledgerWeight : '');
       html += '<div class="wg-ed">' +
         '<div class="wg-f"><label>봉지 수<input type="number" inputmode="numeric" min="0" max="99" id="inBags" value="' + esc(it.bags) + '" placeholder="3"></label>' +
         '<label>무게 (kg)<input type="number" inputmode="decimal" step="0.1" min="0" id="inW" value="' + esc(wv) + '" placeholder="0.0"></label></div>' +
         (it.ledgerWeight !== '' && !it.weighed ? '<p class="wg-note">장부에 적힌 무게: <b>' + kg(it.ledgerWeight) + '</b> — 저울 값과 같으면 그대로 저장</p>' : '') +
+        (it.free ? '<p class="wg-note">무상 희망 고객이에요. <b>사진·로스 없이 무게만</b> 넣으면 돼요. 입금 대신 무상수거 안내 알림톡이 가요.</p>' +
+          '<div class="wg-btns"><button type="button" class="save wide" data-save="weigh">저장</button></div>' :
         thumbsHtml(it, '계량') +
         (it.photos.계량 && !st.thumbs[it.id] ? '<button type="button" class="wg-link" data-thumbs="1">올린 사진 ' + it.photos.계량 + '장 보기·지우기</button>' : '') +
-        '<div class="wg-btns"><button type="button" data-pick="계량">📷 계량 사진 고르기</button><button type="button" class="save" data-save="weigh">저장</button></div>' +
+        '<div class="wg-btns"><button type="button" data-pick="계량">📷 계량 사진 고르기</button><button type="button" class="save" data-save="weigh">저장</button></div>') +
         '<p class="wg-note" id="edMsg"></p></div>';
     }
     return html + '</li>';
@@ -167,7 +169,7 @@
       uploadPend(it, '계량').then(function (fail) {
         disableEd(false);
         if (fail) { render(); setMsg('무게는 저장했어요. 사진 ' + fail + '장을 못 올렸어요 — 다시 골라 저장해 주세요.', true); return; }
-        if (!it.photos.계량) { render(); setMsg('무게 저장 ✓  계량 사진도 골라 주세요.', true); return; }
+        if (!it.photos.계량 && !it.free) { render(); setMsg('무게 저장 ✓  계량 사진도 골라 주세요.', true); return; }
         st.open = ''; render();
       });
     }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
