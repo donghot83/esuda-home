@@ -177,3 +177,17 @@ test('2026-11-17 짧은 예약번호: 준비 완료 버튼·취소·예약 찾�
   assert.strictEqual(c.ok, true);
   assert.strictEqual(e.ctx.findBookings_(short)[0].status, '취소');
 });
+
+test('2026-11-17 참관 번호(ALIM_CC): 고객에게 간 알림톡을 같은 템플릿·내용으로 대표 번호에도, 기록은 뒷4자리·중복 판단엔 안 섞임', () => {
+  const e = env(Object.assign({}, READY, { ALIM_CC: '010-9999-8888' }));
+  const r = e.post(sub());
+  assert.strictEqual(e.fetches.length, 2);
+  const [a, b] = e.fetches.map(f => f.body.messages[0]);
+  assert.strictEqual(a.to, '01012345678'); assert.strictEqual(b.to, '01099998888');
+  assert.strictEqual(b.kakaoOptions.templateId, a.kakaoOptions.templateId);
+  assert.deepStrictEqual(b.kakaoOptions.variables, a.kakaoOptions.variables);
+  const log = e.sheet('알림톡기록').rows.slice(1).map(x => [x[3], x[4]]);
+  assert.deepStrictEqual(log, [['****5678', '성공'], ['****8888', '참관 성공']]);
+  assert.ok(!JSON.stringify(e.sheet('알림톡기록').rows).includes('99998888'));
+  const e2 = env(Object.assign({}, READY, { ALIM_CC: '' })); e2.post(sub()); assert.strictEqual(e2.fetches.length, 1);   // 없으면 안 보냄
+});

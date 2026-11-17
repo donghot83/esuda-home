@@ -15,6 +15,7 @@
  *   SOLAPI_FROM               : 솔라피에 등록한 발신번호 (알림톡 실패 시 문자로 대신 보낼 때)
  *   TPL_BOOKED / TPL_PICKED / TPL_PAID / TPL_FREE / TPL_SAMEDAY : 심사 통과한 템플릿 ID (KA01TP…) — 없는 종류는 안 보냄
  *   ALIMTALK_ON = 1           : 위가 다 준비된 뒤 켜는 스위치 (0 이나 없으면 아무것도 안 보냄)
+ *   ALIM_CC = 대표 휴대폰번호   : (선택) 고객에게 간 알림톡을 같은 내용으로 이 번호에도 — 운영 초반 흐름 확인용. 지우면 꺼짐
  * 기록: 예약 서버 시트 '알림톡기록' 탭 (시각 | 종류 | 예약번호 | 받는번호 뒷4자리 | 결과) — 같은 예약·같은 종류는 한 번만 보냄
  */
 
@@ -32,7 +33,8 @@ var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picke
 function alimConf_() {
   var p = PropertiesService.getScriptProperties();
   return { on: p.getProperty('ALIMTALK_ON') === '1', key: p.getProperty('SOLAPI_KEY'), secret: p.getProperty('SOLAPI_SECRET'),
-    pfId: p.getProperty('SOLAPI_PFID'), from: p.getProperty('SOLAPI_FROM'), tpl: function (k) { return p.getProperty(ALIM_KINDS[k].prop) || ''; } };
+    pfId: p.getProperty('SOLAPI_PFID'), from: p.getProperty('SOLAPI_FROM'), tpl: function (k) { return p.getProperty(ALIM_KINDS[k].prop) || ''; },
+    cc: (function (v) { v = String(v || '').replace(/[^0-9]/g, ''); return /^01\d{8,9}$/.test(v) ? v : ''; })(p.getProperty('ALIM_CC')) };   // 2026-11-17 참관 번호(대표가 직접 넣음)
 }
 
 function alimSent_(kind, rid) {
@@ -71,7 +73,19 @@ function sendAlimtalk_(kind, rid, phone, vars) {
     var code = res.getResponseCode(), body = res.getContentText();
     var j = {}; try { j = JSON.parse(body); } catch (e) {}
     var failed = (j.failedMessageList || []).length;
-    if (code >= 200 && code < 300 && !failed) { alimLog_(kind, rid, to, '성공'); return { ok: true }; }
+    if (code >= 200 && code < 300 && !failed) {
+      alimLog_(kind, rid, to, '성공');
+      // 2026-11-17 참관: 스크립트 속성 ALIM_CC 에 번호가 있으면 고객에게 간 알림톡을 같은 내용으로 그 번호에도 (흐름 파악용, 끄려면 속성 삭제)
+      if (c.cc && c.cc !== to) {
+        try {
+          var cm = JSON.parse(JSON.stringify(msg)); cm.to = c.cc;
+          var cr = UrlFetchApp.fetch('https://api.solapi.com/messages/v4/send-many/detail', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+            headers: { Authorization: solapiAuth_(c.key, c.secret) }, payload: JSON.stringify({ messages: [cm] }) });
+          alimLog_(kind, rid, c.cc, cr.getResponseCode() < 300 ? '참관 성공' : '참관 실패 ' + cr.getResponseCode());
+        } catch (e) { alimLog_(kind, rid, c.cc, '참관 실패 ' + e.message); }
+      }
+      return { ok: true };
+    }
     alimLog_(kind, rid, to, '실패 ' + code + ' ' + (j.errorMessage || (j.failedMessageList && j.failedMessageList[0] && j.failedMessageList[0].statusMessage) || body.slice(0, 120)));
     return { ok: false, error: 'send_failed' };
   } catch (e) {
