@@ -11,7 +11,7 @@
  */
 
 var SHEET_DRIVER = '기사기록';
-var DRIVER_LOG_HEADERS = ['수거일', 'ID', '이름', '상태', '시각'];
+var DRIVER_LOG_HEADERS = ['수거일', 'ID', '이름', '상태', '시각', '사진대기'];   // 2026-11-17 사진대기: 완료 먼저 누르고 사진은 뒤에서 올리는 중
 
 function checkDriverKey_(key) {
   var k = PropertiesService.getScriptProperties().getProperty('DRIVER_KEY');
@@ -131,12 +131,42 @@ function driverMark_(b) {
   if (!checkDriverKey_(b.key)) return { ok: false, error: 'forbidden' };
   var date = String(b.date || ''), id = String(b.id || '').slice(0, 200), state = String(b.state || '');
   if (!rules_().parseYmd(date) || !id || ['완료', '못함', ''].indexOf(state) < 0) return { ok: false, error: 'bad_request' };
+  var photoWait = state === '완료' && !!b.photoPending;
   sheet_(SHEET_DRIVER, DRIVER_LOG_HEADERS)  // 한 줄 추가라 잠금 없이 (신청을 막지 않게)
-    .appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')]);
+    .appendRow([date, id, String(b.name || '').slice(0, 40), state || '되돌림', Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'), photoWait ? 'Y' : '']);
   driverCacheClear_(date);
   // 픽업 완료 알림톡 (신청페이지 예약만, 같은 예약은 한 번만)
-  if (state === '완료' && /^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) { try { alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); } }
+  // 2026-11-17: 사진을 뒤에서 올리는 중이면 지금 안 보냄 → 사진 다 올라가면 화면이 driverPickedNotify, 안 오면 5분 동기화가 대신 보냄
+  if (state === '완료' && !photoWait && /^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) { try { alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); } }
   return { ok: true };
+}
+
+/** {action:'driverPickedNotify', key, id} — 사진 업로드가 끝난 뒤 픽업 완료 알림톡(사진 버튼) 보내기 */
+function driverPickedNotify_(b) {
+  if (!checkDriverKey_(b.key)) return { ok: false, error: 'forbidden' };
+  var id = String(b.id || '');
+  if (!/^ESD-\d{6}-[A-Z0-9]{4}$/.test(id)) return { ok: true, skipped: 'not_booking' };
+  try { return alimPicked_(id); } catch (e) { logError_('알림톡(픽업 완료)', e); return { ok: false }; }
+}
+
+/** 5분 동기화 때: '사진대기'로 완료한 지 3분이 지났는데 픽업 완료 알림톡이 아직이면 보냄 (사진이 덜 올라가도 안내는 가게) */
+function sendPendingPickups_(now) {
+  var sh = ss_().getSheetByName(SHEET_DRIVER);
+  if (!sh) return 0;
+  var cut = Utilities.formatDate(new Date(now.getTime() - 3 * 60000), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
+  var since = Utilities.formatDate(new Date(now.getTime() - 2 * 864e5), 'Asia/Seoul', 'yyyy-MM-dd');
+  var last = {};
+  sh.getDataRange().getValues().slice(1).forEach(function (r) {
+    if (fmtDate_(r[0]) < since) return;
+    last[String(r[1])] = { state: String(r[3]), at: String(r[4]), wait: String(r[5] || '') === 'Y' };
+  });
+  var n = 0;
+  Object.keys(last).forEach(function (id) {
+    var x = last[id];
+    if (x.state !== '완료' || !x.wait || x.at > cut || !/^ESD-/.test(id)) return;
+    try { var r = alimPicked_(id); if (r && r.ok && !r.skipped) n++; } catch (e) { logError_('알림톡(픽업 완료·대기)', e); }
+  });
+  return n;
 }
 
 /** 점검 메일용: 그날 완료/못함/전체 */

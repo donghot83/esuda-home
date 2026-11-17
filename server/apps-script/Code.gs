@@ -145,6 +145,7 @@ function doPost(e) {
     if (body.action === 'driverList') return json_(driverList_(body));   // 기사님 화면 (코드는 본문으로만)
     if (body.action === 'driverMark') return json_(driverMark_(body));
     if (body.action === 'driverPhoto') return json_(driverPhoto_(body));   // 2026-11-16 기사님 수거 사진
+    if (body.action === 'driverPickedNotify') return json_(driverPickedNotify_(body));   // 2026-11-17 사진 다 올린 뒤 픽업 완료 알림톡
     if (body.action === 'pickupPhoto') return json_(pickupPhoto_(body));
     if (body.action === 'weighList') return json_(weighList_(body));     // 2026-11-17 계량 화면 (계량 코드 필요)
     if (body.action === 'weighSave') return json_(weighSave_(body));

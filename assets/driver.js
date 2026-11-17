@@ -157,14 +157,14 @@
     setTimeout(function () { map.invalidateSize(); map.fitBounds(b, { padding: [24, 24] }); }, 50);
   }
 
-  function mark(it, state) {
+  function mark(it, state, photoPending) {
     var prev = it.state; it.state = state; st.choose = ''; render();
-    post({ action: 'driverMark', key: st.key, date: st.date, id: it.id, name: it.name, state: state }).then(function (r) {
+    post({ action: 'driverMark', key: st.key, date: st.date, id: it.id, name: it.name, state: state, photoPending: !!photoPending }).then(function (r) {
       if (!r.ok) { it.state = prev; render(); alert('저장하지 못했어요. 다시 눌러 주세요.'); }
     }).catch(function () { it.state = prev; render(); alert('인터넷 연결을 확인하고 다시 눌러 주세요.'); });
   }
 
-  /* 수거 사진 (2026-11-16): 휴대폰에서 1280px JPEG 로 줄여 한 장씩 올림 */
+  /* 수거 사진 — 2026-11-17: 찍으면 바로 '완료' 처리, 사진은 1024px 로 줄여 3장씩 동시에 뒤에서 올림. 다 올라가면 픽업 완료 알림톡(사진 버튼) */
   var fileIn = document.createElement('input');
   fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.setAttribute('capture', 'environment'); fileIn.multiple = true; fileIn.hidden = true;
   document.body.appendChild(fileIn);
@@ -172,10 +172,10 @@
     return new Promise(function (ok, bad) {
       var url = URL.createObjectURL(file), img = new Image();
       img.onload = function () {
-        var k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+        var k = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
         c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.8));
+        URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.7));
       };
       img.onerror = function () { URL.revokeObjectURL(url); bad(new Error('img')); };
       img.src = url;
@@ -186,23 +186,28 @@
     if (!pend || !files.length) return;
     var it = st.items.filter(function (x) { return x.id === pend.id; })[0]; if (!it) return;
     files = files.slice(0, Math.max(0, PHOTO_MAX - (it.photos || 0)));
-    var i = 0, failed = false;
-    (function next() {
-      if (i >= files.length) {
-        it.uploading = '';
-        if (failed && pend.done) { render(); if (confirm('사진을 못 올렸어요. 사진 없이 완료할까요?')) mark(it, '완료'); return; }
-        if (failed) alert('사진을 못 올렸어요. 인터넷 연결을 확인하고 다시 올려 주세요.');
-        if (pend.done) mark(it, '완료'); else render();
-        return;
+    if (pend.done && it.state !== '완료') mark(it, '완료', true);   // 완료 먼저 (기다리지 않게)
+    var total = files.length, sent = 0, failed = 0, idx = 0, running = 0;
+    var status = function () { it.uploading = sent + failed < total ? '사진 올리는 중… ' + (sent + failed) + '/' + total : ''; render(); };
+    status();
+    var finish = function () {
+      it.uploading = ''; render();
+      if (failed) alert('사진 ' + failed + '장을 못 올렸어요. 「📷 사진 추가」로 다시 올려 주세요. (수거 완료는 저장됐어요)');
+      if (pend.done) post({ action: 'driverPickedNotify', key: st.key, id: it.id }).catch(function () {});   // 사진 버튼 있는 픽업 완료 알림톡
+    };
+    var pump = function () {
+      while (running < 3 && idx < total) {
+        (function (f) {
+          running++;
+          shrink(f).then(function (data) {
+            return post({ action: 'driverPhoto', key: st.key, date: st.date, id: it.id, name: it.name, data: data });
+          }).then(function (r) { if (r && r.ok) { sent++; it.photos = Math.max(it.photos || 0, r.count); } else failed++; })
+            .catch(function () { failed++; })
+            .then(function () { running--; status(); if (sent + failed >= total) finish(); else pump(); });
+        })(files[idx++]);
       }
-      it.uploading = '사진 올리는 중… ' + (i + 1) + '/' + files.length; render();
-      shrink(files[i]).then(function (data) {
-        return post({ action: 'driverPhoto', key: st.key, date: st.date, id: it.id, name: it.name, data: data });
-      }).then(function (r) {
-        if (r && r.ok) it.photos = r.count; else failed = true;
-        i++; next();
-      }).catch(function () { failed = true; i++; next(); });
-    })();
+    };
+    pump();
   });
 
   $('list').addEventListener('click', function (e) {
@@ -220,6 +225,7 @@
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var act = b.getAttribute('data-act');
     if (act === '완료') { st.choose = st.choose === id ? '' : id; render(); return; }   // 사진 찍을지 먼저 물어봄
+    if (act === '' && it.state === '완료' && !confirm(it.name + ' 수거 완료를 취소할까요?')) return;   // 2026-11-17 실수로 되돌리기 방지
     mark(it, act);
   });
   Array.prototype.forEach.call(document.querySelectorAll('.dv-sort button'), function (b) {

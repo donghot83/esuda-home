@@ -191,3 +191,24 @@ test('2026-11-17 참관 번호(ALIM_CC): 고객에게 간 알림톡을 같은 �
   assert.ok(!JSON.stringify(e.sheet('알림톡기록').rows).includes('99998888'));
   const e2 = env(Object.assign({}, READY, { ALIM_CC: '' })); e2.post(sub()); assert.strictEqual(e2.fetches.length, 1);   // 없으면 안 보냄
 });
+
+test('2026-11-17 기사님: 사진 찍고 완료 → 완료 먼저(알림톡 보류), 사진 다 올린 뒤 driverPickedNotify 로 사진 버튼 알림톡 / 안 오면 5분 동기화가 3분 뒤 대신', () => {
+  const P = Object.assign({}, READY, { TPL_PICKED_PHOTO: 'KA01TPPHOTO' });
+  const e = env(P);
+  const r = e.post(sub({ date: '2026-11-16' }));
+  const before = e.fetches.length;
+  e.post({ action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, state: '완료', photoPending: true });
+  assert.strictEqual(e.fetches.length, before);   // 아직 안 보냄
+  e.post({ action: 'driverPhoto', key: 'GOODKEY123', date: '2026-11-16', id: r.reservationId, data: Buffer.from('p').toString('base64') });
+  e.post({ action: 'driverPickedNotify', key: 'GOODKEY123', id: r.reservationId });
+  assert.strictEqual(e.fetches.length, before + 1);
+  assert.strictEqual(e.fetches[e.fetches.length - 1].body.messages[0].kakaoOptions.templateId, 'KA01TPPHOTO');
+  // 다른 예약: 사진이 안 올라온 경우 → 5분 동기화가 3분 뒤 기본 픽업 완료로
+  const r2 = e.post(sub({ date: '2026-11-16', name: '두번째', submissionId: 'sub-second-0002' }));
+  const b2 = e.fetches.length;
+  e.post({ action: 'driverMark', key: 'GOODKEY123', date: '2026-11-16', id: r2.reservationId, state: '완료', photoPending: true });
+  assert.strictEqual(e.ctx.sendPendingPickups_(new Date(Date.parse('2026-11-16T03:01:00Z'))), 0);   // 1분 뒤엔 아직
+  assert.strictEqual(e.ctx.sendPendingPickups_(new Date(Date.parse('2026-11-16T03:10:00Z'))), 1);  // 3분 넘으면 보냄
+  assert.strictEqual(e.fetches.length, b2 + 1);
+  assert.strictEqual(e.ctx.sendPendingPickups_(new Date(Date.parse('2026-11-16T03:20:00Z'))), 0);  // 두 번은 안 보냄
+});
