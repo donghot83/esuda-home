@@ -268,6 +268,7 @@ function cancelReservation(input) {
       sheet_(SHEET_CANCEL_LOG, ['취소시각', '수거일', '번호', '이름', '지역구', '예약번호'])
         .appendRow([Utilities.formatDate(now, 'Asia/Seoul', 'yyyy-MM-dd HH:mm'), q.date, f.no, f.name, f.area, rid]);
     }
+    if (q.date) driverCacheClear_(q.date);   // 2026-11-17: 기사님 화면에 바로 취소로 보이게
     return { ok: true, msg: (f ? q.date.slice(5).replace('-', '/') + ' ' + f.no + '번 ' + f.name : rid) + ' 취소 처리\n' + msgs.join('\n') };
   } finally { lock.releaseLock(); }
 }
