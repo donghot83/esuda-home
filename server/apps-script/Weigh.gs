@@ -3,8 +3,8 @@
  *
  * ① 계량: 고객(장부 번호-봉지 수, 예 1-3)을 골라 봉지 수·무게 입력 + 계량 사진(폰 갤러리에서 고름)
  *     → 장부 '무게'(F) 칸에 기록. 장부에 이미 값이 있고 다르면 '덮어쓸까요?'를 먼저 물어봄(이중 체크).
- * ② 로스: 나중에 따로(당일·다음 날 OK). '로스 없음' 또는 kg + 로스 사진 → 장부 '로스'(G) 칸.
- *     계량 화면으로 계량한 신청페이지 예약은 로스를 확인하기 전까지 이체 파일에서 빠진다('로스 미정').
+ * ② 로스·무상제외: 2026-11-18부터 계량과 같은 칸에서 한 번에 저장(빈칸 = 0). 로스 사진은 로스가 있을 때만.
+ *     로스를 안 넣으면 0(장부 로스 칸 그대로)으로 정산 — '로스 미정'으로 이체에서 빼지 않음.
  * ③ 정산 검토표(메뉴): 무게·로스·금액·사진 수·경고를 한 장에 → 사람이 엑셀로 최종 확인.
  * ④ 이체 파일 만들 때만 입금 예정 알림톡 — 계량 사진이 있고 TPL_PAID_PHOTO 가 있으면 [계량 사진 보기] 버튼.
  *
@@ -135,13 +135,17 @@ function weighFind_(date, id) {
   return null;
 }
 
-/** {action:'weighSave', key, date, id, bags, weight, force?} → 장부 무게 칸 + '계량' 탭. 장부 값과 다르면 force 없이는 mismatch */
+/** {action:'weighSave', key, date, id, bags, weight, force?, withLoss?, loss?, excl?} → 장부 무게 칸 + '계량' 탭. 장부 값과 다르면 force 없이는 mismatch
+ *  2026-11-18 대표 결정: 계량·로스를 한 화면에서 한 번에 저장 (withLoss). 로스·무상제외 빈칸 = 0 → 저장하면 로스 확인 끝 */
 function weighSave_(b) {
   if (!checkWeighKey_(b.key)) return { ok: false, error: 'forbidden' };
   var date = String(b.date || ''), id = String(b.id || '').slice(0, 200), w = weighNum_(b.weight), bags = weighNum_(b.bags);
   if (!rules_().parseYmd(date) || !id) return { ok: false, error: 'bad_request' };
   if (!(w > 0 && w < 1000)) return { ok: false, error: 'bad_weight' };
   if (!(bags >= 0 && bags < 100)) bags = '';
+  var withLoss = !!b.withLoss, z = function (v) { return v === '' || v == null ? 0 : weighNum_(v); };
+  var loss = withLoss ? z(b.loss) : 0, excl = withLoss ? z(b.excl) : 0;
+  if (!(loss >= 0 && loss < 1000) || !(excl >= 0 && excl < 1000)) return { ok: false, error: 'bad_loss' };
   var lock = ledgerLock_();
   if (!lock.tryLock(15000)) return { ok: false, error: 'busy' };
   try {
@@ -149,12 +153,37 @@ function weighSave_(b) {
     if (!f) return { ok: false, error: 'not_found' };
     if (f.x.cancelled) return { ok: false, error: 'cancelled' };
     var cur = f.x.weight, hasCur = cur !== '' && cur != null && !isNaN(+cur);
-    if (hasCur && !sameKg_(cur, w) && !b.force) return { ok: false, error: 'mismatch', ledger: +cur };
+    if (hasCur && !sameKg_(cur, w) && !b.force) return { ok: false, error: 'mismatch', ledger: +cur, what: '무게' };
+    var lossCheck = withLoss ? lossCheck_(f, w, loss, excl, b.force) : null;
+    if (lossCheck) return lossCheck;   // 아무것도 안 쓰고 먼저 물어봄
     if (!hasCur || !sameKg_(cur, w)) f.sh.getRange(f.x.row, LEDGER_COL.weight).setValue(w);
-    weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '봉지': bags, '무게': w, '계량시각': weighNow_() });
+    var rec = { '번호': f.x.no, '이름': f.x.name, '봉지': bags, '무게': w, '계량시각': weighNow_() };
+    if (withLoss) { lossWrite_(f, loss, excl); rec['로스'] = loss; rec['로스확인'] = 'Y'; rec['로스시각'] = weighNow_(); rec['무상제외'] = excl; }
+    weighUpsert_(date, id, rec);
     driverCacheClear_(date);
-    return { ok: true, weight: w, bags: bags, changed: hasCur && !sameKg_(cur, w) };
+    return { ok: true, weight: w, bags: bags, changed: hasCur && !sameKg_(cur, w), loss: loss, excl: excl, lossDone: withLoss };
   } finally { lock.releaseLock(); }
+}
+
+/** 로스·무상제외 검사 — 문제 있으면 {ok:false,…}, 없으면 null */
+function lossCheck_(f, w, loss, excl, force) {
+  if (excl > 0 && !f.c.excl) return { ok: false, error: 'no_excl_col' };
+  if (w > 0 && loss + excl > w) return { ok: false, error: 'loss_over' };
+  var n0 = function (v) { return v === '' || v == null || isNaN(+v) ? 0 : +v; };
+  var curL = n0(f.x.loss), curX = n0(f.x.excl);
+  if (!force) {
+    if (!sameKg_(curL, loss) && curL > 0) return { ok: false, error: 'mismatch', ledger: curL, what: '로스' };
+    if (!sameKg_(curX, excl) && curX > 0) return { ok: false, error: 'mismatch', ledger: curX, what: '무상제외' };
+  }
+  return null;
+}
+function lossWrite_(f, loss, excl) {
+  var n0 = function (v) { return v === '' || v == null || isNaN(+v) ? 0 : +v; };
+  if (!sameKg_(n0(f.x.loss), loss)) f.sh.getRange(f.x.row, f.c.loss).setValue(loss > 0 ? loss : '');
+  if (f.c.excl && !sameKg_(n0(f.x.excl), excl)) {
+    f.sh.getRange(f.x.row, f.c.excl).setValue(excl > 0 ? excl : '');
+    if (excl > 0) { try { ensureFinalFormula_(f.sh, f.x.row); } catch (e) { logError_('최종 수식', e); } }
+  }
 }
 
 /** {action:'lossSave', key, date, id, loss(폐기물, 0 = 없음), excl?(무상제외: 박스·이불 등), force?} → 장부 로스·무상제외 칸 + 로스 확인
@@ -170,20 +199,9 @@ function lossSave_(b) {
   try {
     var f = weighFind_(date, id);
     if (!f) return { ok: false, error: 'not_found' };
-    if (excl > 0 && !f.c.excl) return { ok: false, error: 'no_excl_col' };
-    var w = +f.x.weight;
-    if (w > 0 && loss + excl > w) return { ok: false, error: 'loss_over' };
-    var n0 = function (v) { return v === '' || v == null || isNaN(+v) ? 0 : +v; };
-    var curL = n0(f.x.loss), curX = n0(f.x.excl);
-    if (!b.force) {
-      if (!sameKg_(curL, loss) && curL > 0) return { ok: false, error: 'mismatch', ledger: curL, what: '로스' };
-      if (!sameKg_(curX, excl) && curX > 0) return { ok: false, error: 'mismatch', ledger: curX, what: '무상제외' };
-    }
-    if (!sameKg_(curL, loss)) f.sh.getRange(f.x.row, f.c.loss).setValue(loss > 0 ? loss : '');
-    if (f.c.excl && !sameKg_(curX, excl)) {
-      f.sh.getRange(f.x.row, f.c.excl).setValue(excl > 0 ? excl : '');
-      if (excl > 0) { try { ensureFinalFormula_(f.sh, f.x.row); } catch (e) { logError_('최종 수식', e); } }
-    }
+    var bad = lossCheck_(f, +f.x.weight, loss, excl, b.force);
+    if (bad) return bad;
+    lossWrite_(f, loss, excl);
     weighUpsert_(date, id, { '번호': f.x.no, '이름': f.x.name, '로스': loss, '로스확인': 'Y', '로스시각': weighNow_(), '무상제외': excl });
     driverCacheClear_(date);
     return { ok: true, loss: loss, excl: excl };
@@ -237,14 +255,9 @@ function weighThumbs_(b) {
   return { ok: true, photos: out };
 }
 
-/** 이체 파일용: 계량 화면으로 계량했는데 로스 확인 전이면 true */
+/** 이체 파일용 '로스 미정' — 2026-11-18 대표 결정: 로스를 안 넣으면 0(장부 로스 칸 그대로)으로 보고 이체에서 빼지 않음 */
 var FREE_UNDER_KG = 15;   // 이 무게 미만이면 무상수거 → 로스 입력 필요 없음 (2026-11-17 대표 결정)
-function weighLossPending_(date, rid) {
-  if (freeWishSet_()[rid]) return false;   // 무상 희망은 로스 필요 없음
-  var rec = weighRecords_()[date + '|' + rid];
-  if (rec && rec.at && +rec.weight < FREE_UNDER_KG) return false;   // 15kg 미만도 로스 필요 없음
-  return !!(rec && rec.at && !rec.lossDone);
-}
+function weighLossPending_(date, rid) { return false; }
 
 /* ===== ③ 정산 검토표 (메뉴) ===== */
 /** dates: ['2026-11-16', …] → 검토표 줄 [{…, 경고}] */
@@ -269,11 +282,10 @@ function settleReview_(dates) {
         if (rec.at && !sameKg_(rec.weight, w)) warn.push('장부 무게가 계량 화면과 다름');
         if (w > 0 && (+x.excl || 0) + l > w) warn.push('제외+로스가 무게보다 큼');
         if (!p.계량) warn.push('계량 사진 없음');
-        if (rec.at && !rec.lossDone && w >= FREE_UNDER_KG) warn.push('로스 미정');   // 15kg 미만은 로스 필요 없음
         if (l > 0 && !p.로스) warn.push('로스 사진 없음');
       }
       out.push({ '수거일': date, '번호': x.no + (rec.bags !== '' && rec.bags != null ? '-' + rec.bags : ''), '이름': x.name, '구분': x.rid ? (isFree ? '신청페이지(무상 희망)' : '신청페이지') : '카톡·직원',
-        '무게': x.weight, '무상제외': x.excl, '로스': x.loss, '금액': x.amount, '계량사진': p.계량, '로스사진': p.로스, '로스확인': rec.lossDone ? '확인' : (rec.at ? '미정' : '-'),
+        '무게': x.weight, '무상제외': x.excl, '로스': x.loss, '금액': x.amount, '계량사진': p.계량, '로스사진': p.로스, '로스확인': l > 0 ? '로스 ' + l + 'kg' : '없음(0)',
         '알림톡': x.rid && /^01\d{8,9}$/.test(phone.replace(/[^0-9]/g, '')) ? (isFree ? '무상수거 안내' : '보냄') : '안 감(연락처 없음)', '경고': warn.join(', ') });
     });
   });

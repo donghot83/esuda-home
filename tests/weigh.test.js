@@ -94,14 +94,23 @@ test('로스: 나중에 따로, 0이면 로스 없음, 무게보다 크면 거�
   assert.strictEqual(q(e, { action: 'weighList' }).items.find(x => x.name === '계량고객').lossDone, true);
 });
 
-test('이체 파일: 계량 화면 계량 후 로스 미정이면 빠짐 → 로스 확인 뒤 들어가고 사진 버튼 입금 예정 알림톡(로스 차감 변수)', () => {
+test('2026-11-18 계량·로스 한 번에: 로스 비우면 0, 로스 안 넣어도 이체에서 안 빠짐, 넣으면 사진 버튼 입금 예정 알림톡(로스 차감 변수)', () => {
   const { e, a, L } = setup();
   const id = a.reservationId;
   q(e, { action: 'weighSave', id, bags: 3, weight: 40 });
   q(e, { action: 'weighPhoto', id, kind: '계량', data: IMG });
+  rowOf(L, id)[8] = 40 * 250;
   let r = e.ctx.makeTransferFile({ dryRun: true });
-  assert.strictEqual(r.count, 0); assert.ok(r.skipped.some(s => /로스 미정/.test(s.이유)));
-  q(e, { action: 'lossSave', id, loss: 2 });
+  assert.strictEqual(r.count, 1); assert.ok(!r.skipped.some(s => /로스 미정/.test(s.이유)));
+  const z = q(e, { action: 'weighSave', id, bags: 3, weight: 40, withLoss: true, loss: '', excl: '' });
+  assert.strictEqual(z.ok, true); assert.strictEqual(z.loss, 0); assert.strictEqual(z.lossDone, true);
+  assert.strictEqual(q(e, { action: 'weighList' }).items.find(x => x.name === '계량고객').lossDone, true);
+  assert.strictEqual(q(e, { action: 'weighSave', id, weight: 40, withLoss: true, loss: 50 }).error, 'loss_over');
+  assert.ok(!rowOf(L, id)[6]);   // 거절되면 아무것도 안 씀
+  const mm = q(e, { action: 'weighSave', id, weight: 41, withLoss: true, loss: 2 });
+  assert.strictEqual(mm.error, 'mismatch'); assert.strictEqual(mm.what, '무게'); assert.ok(!rowOf(L, id)[6]);
+  assert.strictEqual(q(e, { action: 'weighSave', id, bags: 3, weight: 40, withLoss: true, loss: 2 }).ok, true);
+  assert.strictEqual(rowOf(L, id)[5], 40); assert.strictEqual(rowOf(L, id)[6], 2);
   rowOf(L, id)[8] = (40 - 2) * 250 - 2 * 200; // 장부 수식 결과 흉내
   r = e.ctx.makeTransferFile();
   assert.strictEqual(r.count, 1); assert.strictEqual(r.total, 9100);
@@ -122,13 +131,13 @@ test('계량 화면을 안 쓴 날(직원이 장부에 직접 적은 기존 방�
   assert.ok(e.fetches.some(f => f.body.messages[0].kakaoOptions.templateId === 'KA01TPPAID'));
 });
 
-test('정산 검토표: 사진 없음·로스 미정·장부와 계량 화면 다름 경고, 카톡 예약은 알림톡 안 감', () => {
+test('정산 검토표: 사진 없음·장부와 계량 화면 다름 경고, 카톡 예약은 알림톡 안 감', () => {
   const { e, a, L } = setup();
   const id = a.reservationId;
   q(e, { action: 'weighSave', id, bags: 3, weight: 40 });
   const rows = e.ctx.settleReview_(['2026-11-16']);
   const me = rows.find(x => x['이름'] === '계량고객'), kt = rows.find(x => x['이름'] === '카톡손님');
-  assert.match(me['경고'], /계량 사진 없음/); assert.match(me['경고'], /로스 미정/);
+  assert.match(me['경고'], /계량 사진 없음/); assert.doesNotMatch(me['경고'], /로스 미정/);
   assert.strictEqual(me['알림톡'], '보냄'); assert.match(String(me['번호']), /-3$/);
   assert.match(kt['알림톡'], /안 감/);
   rowOf(L, id)[5] = 41;   // 누가 장부를 고침

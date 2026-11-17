@@ -1,4 +1,5 @@
-/* 이수다 계량 화면 (2026-11-17) — ① 계량(봉지·무게·계량 사진) ② 로스(나중에 따로)
+/* 이수다 계량 화면 — 2026-11-18 대표 결정: 계량·로스를 한 칸에서 한 번에 (봉지·무게·무상제외·로스 + 사진 → 저장 한 번)
+ * 로스·무상제외는 비워 두면 0. 로스 사진은 로스가 있을 때만.
  * 사진은 폰 기본 카메라로 찍어 갤러리에 남기고(백업), 여기서는 갤러리에서 골라 올린다.
  * 코드는 이 휴대폰에만 저장, 서버에는 요청 본문으로만. 고객 연락처·주소·계좌는 받지 않는다. */
 (function () {
@@ -8,7 +9,7 @@
   var API = isLocal ? '/api' : CFG.apiUrl;
   var $ = function (id) { return document.getElementById(id); };
   var KEY_STORE = 'esuda_weigh_key';
-  var st = { key: '', date: '', items: [], tab: 'weigh', open: '', up: {}, seq: {}, busy: false, thumbs: {}, exclCol: false, unit: 250, lossUnit: 200 };
+  var st = { key: '', date: '', items: [], open: '', up: {}, seq: {}, busy: false, thumbs: {}, exclCol: false, unit: 250, lossUnit: 200 };
 
   function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
   function save(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
@@ -20,7 +21,8 @@
   function addDays(ymd, n) { var d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10) + n)); return d.toISOString().slice(0, 10); }
   function kg(v) { return v === '' || v == null ? '' : (Math.round(+v * 100) / 100) + 'kg'; }
   function label(it) { return it.bags === '' || it.bags == null ? (it.no || '?') + '번' : (it.no || '?') + '-' + it.bags; }   // 봉지 수 넣으면 1-3
-  function weightOf(it) { return it.weighed ? it.ledgerWeight : ''; }
+  function curLoss(it) { return it.lossDone ? (+it.loss > 0 ? it.loss : '') : it.ledgerLoss; }
+  function curExcl(it) { return it.ledgerExcl !== '' && it.ledgerExcl != null && +it.ledgerExcl > 0 ? it.ledgerExcl : ''; }
 
   function showKey(err) { $('keyView').hidden = false; $('listView').hidden = true; $('btnRefresh').hidden = true; $('keyErr').textContent = err || ''; $('keyInput').value = ''; }
 
@@ -70,92 +72,70 @@
   }
 
   function live() { return st.items.filter(function (x) { return !x.cancelled; }); }
-  function lossTargets() { return live().filter(function (x) { return !x.free && +x.ledgerWeight >= 15; }); }   // 무상 희망·15kg 미만은 로스 없음
 
+  var keptFor = '';
   function render() {
-    var keep = {};   // 다시 그려도 입력하던 값은 그대로
-    ['inBags', 'inW', 'inL', 'inX'].forEach(function (k) { var el = $(k); if (el) keep[k] = el.value; });
+    var keep = {};   // 다시 그려도 입력하던 값은 그대로 (같은 고객 칸일 때만)
+    if (keptFor && keptFor === st.open) ['inBags', 'inW', 'inL', 'inX'].forEach(function (k) { var el = $(k); if (el) keep[k] = el.value; });
     renderInner();
+    keptFor = st.open;
     Object.keys(keep).forEach(function (k) { var el = $(k); if (el) el.value = keep[k]; });
-    if (st.tab === 'loss') calcPreview();
+    calcPreview();
   }
   function renderInner() {
-    var L = live(), w = L.filter(function (x) { return x.weighed; }).length, lt = lossTargets(), ld = lt.filter(function (x) { return x.lossDone; }).length;
-    $('cntWeigh').textContent = w + '/' + L.length;
-    $('cntLoss').textContent = ld + '/' + lt.length;
-    Array.prototype.forEach.call(document.querySelectorAll('.wg-tabs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === st.tab); });
-    $('help').textContent = st.tab === 'weigh'
-      ? '고객을 눌러 봉지 수·무게를 넣고, 갤러리에서 계량 사진을 골라 저장해요. 장부에 적힌 무게와 다르면 한 번 더 물어봐요.'
-      : '로스(폐기물)는 무게에서 빼고 kg당 ' + st.lossUnit + '원 공제, 무상제외(박스·이불 등)는 무게에서만 빼요. 15kg 미만·무상 희망 고객은 로스가 필요 없어서 여기 안 나와요. 정하기 전에는 그 고객 입금이 이체 파일에서 빠져요.';
-    var list = st.tab === 'weigh' ? st.items : lossTargets().slice().sort(function (a, b) { return (a.lossDone - b.lossDone); });
-    $('list').innerHTML = list.map(function (it) { return st.tab === 'weigh' ? weighCard(it) : lossCard(it); }).join('') ||
-      (st.tab === 'loss' ? '<li class="dv-sub">계량한 고객이 아직 없어요.</li>' : '');
-    if (st.tab === 'loss') calcPreview();
+    var L = live(), w = L.filter(function (x) { return x.weighed; }).length;
+    $('cntWeigh').textContent = '계량 ' + w + '/' + L.length + '명';
+    $('help').textContent = '고객을 눌러 봉지 수·무게를 넣고 계량 사진을 골라 저장해요. 로스(폐기물, kg당 ' + st.lossUnit + '원 공제)·무상제외(박스·이불 등, 무게에서만 뺌)는 있을 때만 넣고, 없으면 비워 두면 0이에요.';
+    $('list').innerHTML = st.items.map(card).join('');
   }
 
   function thumbsHtml(it, kind) {
     var have = (st.thumbs[it.id] || []).filter(function (p) { return p.kind === kind; });
     var ups = (st.up[it.id + '|' + kind] || []);
     var lab = { up: '올리는 중…', ok: '✓ 저장됨', fail: '실패 · 다시' };
+    if (!have.length && !ups.length) return '';
     return '<div class="wg-pics">' +
       have.map(function (p) { return '<div class="wg-pic"><span class="k">' + esc(p.kind) + '</span>' + (p.data ? '<img alt="" src="data:image/jpeg;base64,' + p.data + '">' : '') + '<button type="button" class="x" data-del="' + esc(p.fileId) + '" aria-label="사진 지우기">✕</button></div>'; }).join('') +
       ups.map(function (u, i) {
-        return '<div class="wg-pic new ' + u.state + '"><span class="k">' + lab[u.state] + '</span><img alt="" src="' + u.data + '">' +
+        return '<div class="wg-pic new ' + u.state + '"><span class="k">' + kind + ' ' + lab[u.state] + '</span><img alt="" src="' + u.data + '">' +
           (u.state === 'up' ? '' : '<button type="button" class="x" data-unpick="' + kind + '|' + i + '" aria-label="빼기">✕</button>') +
           (u.state === 'fail' ? '<button type="button" class="retry" data-retry="' + kind + '|' + i + '">다시 올리기</button>' : '') + '</div>';
       }).join('') +
       '</div>';
   }
 
-  function weighCard(it) {
+  function card(it) {
     var id = esc(it.id);
     if (it.cancelled) return '<li class="wg-item cx"><div class="wg-row"><span class="wg-lab">' + esc(it.no || '?') + '</span><span class="wg-name">' + esc(it.name) + '</span><span class="wg-st">취소</span></div></li>';
     var ok = it.weighed && (it.free || it.photos.계량 > 0);
+    var l = +curLoss(it) || 0, x = +curExcl(it) || 0;
     var stat = it.weighed ? '<b class="good">' + kg(it.ledgerWeight) + ' ✓</b>' : (it.ledgerWeight !== '' ? '<span>장부 ' + kg(it.ledgerWeight) + '</span>' : '<span class="warn">무게 전</span>');
-    stat += '<br>' + (it.free ? '<span class="free">무상 · 사진 없음</span>' : (it.photos.계량 ? '📷 ' + it.photos.계량 + '장' : '<span class="warn">사진 없음</span>')) +
-      (!it.free && it.weighed && +it.ledgerWeight < 15 ? '<br><span class="free">15kg 미만 · 무상 (로스 없음)</span>' : '');
+    if (!it.free && (l > 0 || x > 0)) stat += '<br><span>' + (l > 0 ? '로스 ' + kg(l) : '') + (l > 0 && x > 0 ? ' · ' : '') + (x > 0 ? '제외 ' + kg(x) : '') + '</span>';
+    stat += '<br>' + (it.free ? '<span class="free">무상 · 사진 없음</span>' : (it.photos.계량 ? '📷 ' + it.photos.계량 + (it.photos.로스 ? '+로스 ' + it.photos.로스 : '') + '장' : '<span class="warn">사진 없음</span>'));
     var html = '<li class="wg-item' + (ok ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + (it.rid ? ' · 신청 ' + esc(it.rid) : ' · 카톡·직원') + '</span>' + (it.free ? ' <span class="wg-free">무상 희망</span>' : '') + '</span><span class="wg-st">' + stat + '</span></button>';
-    if (st.open === it.id) {
-      var wv = it.weighed ? it.ledgerWeight : (it.ledgerWeight !== '' ? it.ledgerWeight : '');
-      html += '<div class="wg-ed">' +
-        '<div class="wg-f"><label>봉지 수<input type="number" inputmode="numeric" min="0" max="99" id="inBags" value="' + esc(it.bags) + '" placeholder="3"></label>' +
-        '<label>무게 (kg)<input type="number" inputmode="decimal" step="0.1" min="0" id="inW" value="' + esc(wv) + '" placeholder="0.0"></label></div>' +
-        (it.ledgerWeight !== '' && !it.weighed ? '<p class="wg-note">장부에 적힌 무게: <b>' + kg(it.ledgerWeight) + '</b> — 저울 값과 같으면 그대로 저장</p>' : '') +
-        (it.free ? '<p class="wg-note">무상 희망 고객이에요. <b>사진·로스 없이 무게만</b> 넣으면 돼요. 입금 대신 무상수거 안내 알림톡이 가요.</p>' +
-          '<div class="wg-btns"><button type="button" class="save wide" data-save="weigh">저장</button></div>' :
-        thumbsHtml(it, '계량') +
-        (it.photos.계량 && !st.thumbs[it.id] ? '<button type="button" class="wg-link" data-thumbs="1">올린 사진 ' + it.photos.계량 + '장 보기·지우기</button>' : '') +
-        '<div class="wg-btns"><button type="button" data-pick="계량">📷 계량 사진 고르기</button><button type="button" class="save" data-save="weigh">저장</button></div>') +
-        '<p class="wg-note" id="edMsg"></p></div>';
-    }
-    return html + '</li>';
-  }
-
-  function lossCard(it) {
-    var id = esc(it.id), w = it.ledgerWeight;
-    var stat = it.lossDone ? '<b class="good">' + (it.loss > 0 ? '로스 ' + kg(it.loss) : '로스 없음') + (it.ledgerExcl > 0 ? ' · 제외 ' + kg(it.ledgerExcl) : '') + ' ✓</b>' : '<span class="warn">로스 미정</span>';
-    stat += '<br><span>' + kg(w) + (it.photos.로스 ? ' · 📷 ' + it.photos.로스 : '') + '</span>';
-    var html = '<li class="wg-item' + (it.lossDone ? ' ok' : '') + '" data-id="' + id + '"><button type="button" class="wg-row" data-open="1"><span class="wg-lab">' + esc(label(it)) + '</span><span><span class="wg-name">' + esc(it.name) + '</span><br><span class="wg-area">' + esc(it.area) + '</span></span><span class="wg-st">' + stat + '</span></button>';
-    if (st.open === it.id) {
-      var cur = it.lossDone ? it.loss : (it.ledgerLoss !== '' ? it.ledgerLoss : '');
-      var curX = it.ledgerExcl !== '' && it.ledgerExcl != null ? it.ledgerExcl : '';
-      html += '<div class="wg-ed">' +
-        '<p class="wg-note">무게 <b>' + esc(kg(w)) + '</b></p>' +
-        '<div class="wg-f">' + (st.exclCol ? '<label>무상제외 (kg)<small> 박스·이불 등</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inX" value="' + esc(curX) + '" placeholder="0"></label>' : '') +
-        '<label>로스 (kg)<small> 폐기물 −' + st.lossUnit + '원/kg</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inL" value="' + esc(cur) + '" placeholder="0"></label></div>' +
-        (st.exclCol ? '' : '<p class="wg-note">장부에 「무상제외」 칸이 아직 없어서 무상제외는 넣을 수 없어요.</p>') +
+    if (st.open !== it.id) return html + '</li>';
+    var wv = it.ledgerWeight !== '' ? it.ledgerWeight : '';
+    html += '<div class="wg-ed">' +
+      '<div class="wg-f"><label>봉지 수<input type="number" inputmode="numeric" min="0" max="99" id="inBags" value="' + esc(it.bags) + '" placeholder="3"></label>' +
+      '<label>무게 (kg)<input type="number" inputmode="decimal" step="0.1" min="0" id="inW" value="' + esc(wv) + '" placeholder="0.0"></label></div>' +
+      (it.ledgerWeight !== '' && !it.weighed ? '<p class="wg-note">장부에 적힌 무게: <b>' + kg(it.ledgerWeight) + '</b> — 저울 값과 같으면 그대로 저장</p>' : '');
+    if (it.free) {
+      html += '<p class="wg-note">무상 희망 고객이에요. <b>사진·로스 없이 무게만</b> 넣으면 돼요. 입금 대신 무상수거 안내 알림톡이 가요.</p>' +
+        '<div class="wg-btns"><button type="button" class="save wide" data-save="1">저장</button></div>';
+    } else {
+      html += '<div class="wg-f">' +
+        (st.exclCol ? '<label>무상제외 (kg)<small> 박스·이불 등</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inX" value="' + esc(curExcl(it)) + '" placeholder="없으면 비움"></label>' : '') +
+        '<label>로스 (kg)<small> 폐기물 −' + st.lossUnit + '원/kg</small><input type="number" inputmode="decimal" step="0.1" min="0" id="inL" value="' + esc(curLoss(it)) + '" placeholder="없으면 비움"></label></div>' +
         '<p class="wg-calc" id="calc"></p>' +
-        (it.ledgerLoss !== '' && !it.lossDone ? '<p class="wg-note">장부에 적힌 로스: <b>' + kg(it.ledgerLoss) + '</b></p>' : '') +
-        thumbsHtml(it, '로스') +
-        (it.photos.로스 && !st.thumbs[it.id] ? '<button type="button" class="wg-link" data-thumbs="1">로스 사진 ' + it.photos.로스 + '장 보기·지우기</button>' : '') +
-        '<div class="wg-btns"><button type="button" class="none wide" data-save="none">로스·제외 없음 (0kg)</button>' +
-        '<button type="button" data-pick="로스">📷 로스 사진 고르기</button><button type="button" class="save" data-save="loss">로스 저장</button></div>' +
-        '<p class="wg-note" id="edMsg"></p></div>';
+        thumbsHtml(it, '계량') + thumbsHtml(it, '로스') +
+        ((it.photos.계량 || it.photos.로스) && !st.thumbs[it.id] ? '<button type="button" class="wg-link" data-thumbs="1">올린 사진 ' + (it.photos.계량 + it.photos.로스) + '장 보기·지우기</button>' : '') +
+        '<div class="wg-btns"><button type="button" data-pick="계량">📷 계량 사진</button><button type="button" data-pick="로스">📷 로스 사진</button>' +
+        '<button type="button" class="save wide" data-save="1">저장</button></div>';
     }
-    return html + '</li>';
+    return html + '<p class="wg-note" id="edMsg"></p></div></li>';
   }
 
-  /* 사진: 갤러리에서 고르기(여러 장) → 1280px JPEG 로 줄여 미리보기, 저장 때 올림 */
+  /* 사진: 갤러리에서 고르기(여러 장) → 줄여서 고르는 즉시 올림 */
   var fileIn = document.createElement('input');
   fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.multiple = true; fileIn.hidden = true;
   document.body.appendChild(fileIn);
@@ -196,7 +176,7 @@
       u.sending = true; running++;
       post({ action: 'weighPhoto', key: st.key, date: st.date, id: it.id, kind: kind, name: it.name, no: it.no, bags: it.bags, seq: u.seq, data: u.data }).then(function (r) {
         if (r && r.ok) { u.state = 'ok'; u.fileId = r.fileId; it.photos[kind] = Math.max(it.photos[kind] || 0, r.count); }
-        else u.state = r && r.error === 'free' ? 'fail' : 'fail';
+        else u.state = 'fail';
       }).catch(function () { u.state = 'fail'; }).then(function () {
         u.sending = false; running--;
         render(); pump(it, kind);
@@ -205,65 +185,58 @@
     });
   }
   function waitUploads() { return pending() ? new Promise(function (ok) { waiters.push(ok); }) : Promise.resolve(); }
-  function failsOf(it, kind) { return (st.up[it.id + '|' + kind] || []).filter(function (u) { return u.state === 'fail'; }).length; }
+  function failsOf(it) { return ['계량', '로스'].reduce(function (n, k) { return n + (st.up[it.id + '|' + k] || []).filter(function (u) { return u.state === 'fail'; }).length; }, 0); }
 
-  /* 로스 탭: 입력하는 동안 최종 무게·예상 금액 (장부 수식과 같은 계산) */
+  /* 입력하는 동안 최종 무게·예상 금액 (장부 수식과 같은 계산) */
   function calcPreview() {
-    var el = $('calc'), it = st.items.filter(function (x) { return x.id === st.open; })[0];
-    if (!el || !it) return;
-    var w = +it.ledgerWeight || 0, x = $('inX') ? (+$('inX').value || 0) : 0, l = +$('inL').value || 0, fin = Math.round((w - x - l) * 100) / 100;
+    var el = $('calc');
+    if (!el || !$('inW')) return;
+    var w = +$('inW').value || 0, x = $('inX') ? (+$('inX').value || 0) : 0, l = $('inL') ? (+$('inL').value || 0) : 0, fin = Math.round((w - x - l) * 100) / 100;
     if (!(w > 0)) { el.textContent = ''; return; }
     if (x + l > w) { el.innerHTML = '<span class="warn">제외+로스가 무게보다 커요</span>'; return; }
     el.innerHTML = '최종 <b>' + fin + 'kg</b> · ' + (fin >= 15 ? '예상 금액 <b>' + Math.round(fin * st.unit - l * st.lossUnit).toLocaleString('ko-KR') + '원</b>' : '<b>무상수거</b> (15kg 미만)');
   }
-  $('list').addEventListener('input', function (e) { if (e.target.id === 'inL' || e.target.id === 'inX') calcPreview(); });
+  $('list').addEventListener('input', function (e) { if (/^in(W|L|X)$/.test(e.target.id)) calcPreview(); });
 
   function setMsg(t, warn) { var el = $('edMsg'); if (el) { el.textContent = t; el.className = 'wg-note' + (warn ? ' warn' : ''); } }
   function disableEd(on) { Array.prototype.forEach.call(document.querySelectorAll('.wg-ed button, .wg-ed input'), function (b) { b.disabled = on; }); }
 
-  function afterSave(it, kind, okMsg, needPhoto) {
+  function afterSave(it, okMsg) {
     var n = pending();
     if (n) setMsg('저장했어요. 사진 올리는 중… (' + n + '장 남음)');
     return waitUploads().then(function () {
       disableEd(false);
-      var fail = failsOf(it, kind);
+      var fail = failsOf(it);
       if (fail) { render(); setMsg(okMsg + ' 사진 ' + fail + '장을 못 올렸어요 — 사진의 「다시 올리기」를 눌러 주세요.', true); return; }
-      if (needPhoto && !it.photos[kind]) { render(); setMsg(okMsg + ' ' + kind + ' 사진도 골라 주세요.', true); return; }
+      if (!it.free && !it.photos.계량) { render(); setMsg(okMsg + ' 계량 사진도 골라 주세요.', true); return; }
+      if (!it.free && +it.loss > 0 && !it.photos.로스) { render(); setMsg(okMsg + ' 로스 사진도 골라 주세요.', true); return; }
       st.open = ''; render();
     });
   }
 
-  function saveWeigh(it, force) {
+  function saveAll(it, force) {
     var bags = $('inBags').value, w = $('inW').value;
+    var loss = $('inL') ? $('inL').value.trim() : '', excl = $('inX') ? $('inX').value.trim() : '';
     if (!(+w > 0)) { setMsg('무게를 넣어 주세요.', true); return; }
+    if ((loss !== '' && (isNaN(+loss) || +loss < 0)) || (excl !== '' && (isNaN(+excl) || +excl < 0))) { setMsg('로스·무상제외 숫자를 확인해 주세요. 없으면 비워 두세요.', true); return; }
     disableEd(true); setMsg('저장 중…');
-    post({ action: 'weighSave', key: st.key, date: st.date, id: it.id, bags: bags, weight: w, force: !!force }).then(function (r) {
+    var body = { action: 'weighSave', key: st.key, date: st.date, id: it.id, bags: bags, weight: w, force: !!force };
+    if (!it.free) { body.withLoss = true; body.loss = loss; body.excl = excl; }
+    post(body).then(function (r) {
       if (!r.ok && r.error === 'mismatch') {
         disableEd(false);
-        if (confirm('장부에는 ' + r.ledger + 'kg로 적혀 있어요.\n' + w + 'kg로 바꿀까요?\n\n(취소를 누르면 그대로 두고 다시 확인할 수 있어요)')) return saveWeigh(it, true);
-        setMsg('장부 값(' + r.ledger + 'kg)과 달라서 저장하지 않았어요. 저울 값을 다시 확인해 주세요.', true); return;
+        var what = r.what || '무게', now = what === '무게' ? w : what === '로스' ? (+loss || 0) : (+excl || 0);
+        if (confirm('장부에는 ' + what + ' ' + r.ledger + 'kg로 적혀 있어요.\n' + now + 'kg로 바꿀까요?\n\n(취소를 누르면 그대로 두고 다시 확인할 수 있어요)')) return saveAll(it, true);
+        setMsg('장부 ' + what + ' 값(' + r.ledger + 'kg)과 달라서 저장하지 않았어요. 다시 확인해 주세요.', true); return;
       }
-      if (!r.ok) { disableEd(false); setMsg(r.error === 'bad_weight' ? '무게를 확인해 주세요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
+      if (!r.ok) {
+        disableEd(false);
+        setMsg(r.error === 'bad_weight' ? '무게를 확인해 주세요.' : r.error === 'loss_over' ? '제외+로스가 무게보다 커요. 확인해 주세요.' :
+          r.error === 'no_excl_col' ? '장부에 무상제외 칸이 아직 없어요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return;
+      }
       it.weighed = true; it.ledgerWeight = r.weight; it.bags = r.bags;
-      afterSave(it, '계량', '무게 저장 ✓', !it.free);
-    }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
-  }
-
-  function saveLoss(it, loss, force, excl) {
-    if (excl == null) excl = $('inX') ? $('inX').value : '';
-    if (loss === '' && +excl > 0) loss = 0;
-    if (loss === '' || isNaN(+loss) || +loss < 0 || (excl !== '' && (isNaN(+excl) || +excl < 0))) { setMsg('로스 kg을 넣거나 "로스·제외 없음"을 눌러 주세요.', true); return; }
-    disableEd(true); setMsg('저장 중…');
-    post({ action: 'lossSave', key: st.key, date: st.date, id: it.id, loss: loss, excl: excl, force: !!force }).then(function (r) {
-      if (!r.ok && r.error === 'mismatch') {
-        disableEd(false);
-        var what = r.what || '로스', now = what === '무상제외' ? (+excl || 0) : loss;
-        if (confirm('장부에는 ' + what + ' ' + r.ledger + 'kg로 적혀 있어요.\n' + now + 'kg로 바꿀까요?')) return saveLoss(it, loss, true, excl);
-        setMsg('장부 ' + what + ' 값(' + r.ledger + 'kg)과 달라서 저장하지 않았어요.', true); return;
-      }
-      if (!r.ok) { disableEd(false); setMsg(r.error === 'loss_over' ? '제외+로스가 무게보다 커요. 확인해 주세요.' : r.error === 'no_excl_col' ? '장부에 무상제외 칸이 아직 없어요.' : '저장하지 못했어요. 다시 눌러 주세요.', true); return; }
-      it.lossDone = true; it.loss = r.loss; it.ledgerLoss = r.loss > 0 ? r.loss : ''; it.ledgerExcl = r.excl > 0 ? r.excl : '';
-      afterSave(it, '로스', '로스 저장 ✓', r.loss > 0);
+      if (r.lossDone) { it.lossDone = true; it.loss = r.loss; it.ledgerLoss = r.loss > 0 ? r.loss : ''; it.ledgerExcl = r.excl > 0 ? r.excl : ''; }
+      afterSave(it, '저장 ✓');
     }).catch(function () { disableEd(false); setMsg('인터넷 연결을 확인하고 다시 눌러 주세요.', true); });
   }
 
@@ -305,15 +278,7 @@
       });
       return;
     }
-    if ((b = e.target.closest('[data-save]'))) {
-      var w = b.getAttribute('data-save');
-      if (w === 'weigh') saveWeigh(it);
-      else if (w === 'none') saveLoss(it, 0, false, 0);
-      else saveLoss(it, $('inL').value);
-    }
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.wg-tabs button'), function (b) {
-    b.addEventListener('click', function () { st.tab = b.getAttribute('data-tab'); st.open = ''; render(); });
+    if (e.target.closest('[data-save]')) saveAll(it);
   });
   $('btnPrev').addEventListener('click', function () { fetchList(addDays(st.date, -1)); });
   $('btnNext').addEventListener('click', function () { fetchList(addDays(st.date, 1)); });
@@ -326,8 +291,7 @@
   });
   $('keyInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('btnKey').click(); });
   window.addEventListener('beforeunload', function (e) {
-    var any = pending() > 0;
-    if (any) { e.preventDefault(); e.returnValue = ''; }
+    if (pending() > 0) { e.preventDefault(); e.returnValue = ''; }
   });
 
   if (!API) { showKey('서버 설정이 아직 없어요.'); return; }
