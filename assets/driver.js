@@ -52,7 +52,20 @@
       mem[r.date] = r;
       show(r);
       prefetch(r.date);
+      if (r.cached) revalidate(r.date, my);   // 저장본을 먼저 보여 줬으면 뒤에서 장부 최신으로
     }).catch(function () { if (my !== seq) return; st.busy = false; $('msg').textContent = '인터넷 연결을 확인하고 새로고침해 주세요.'; });
+  }
+
+  /* 뒤에서 최신 목록 받아 바뀐 게 있으면 화면 갱신 (사진 올리는 중·사진 선택 중이면 화면은 그대로) */
+  function revalidate(date, my) {
+    post({ action: 'driverList', key: st.key, date: date, fresh: true }).then(function (r) {
+      if (!r || !r.ok) return;
+      var old = mem[date]; mem[date] = r;
+      if (my !== seq || st.date !== date) return;
+      if (st.choose || st.items.some(function (x) { return x.uploading; })) return;
+      if (old && JSON.stringify(old.items) === JSON.stringify(r.items) && old.route === r.route) return;
+      show(r);
+    }).catch(function () {});
   }
 
   function show(r) {

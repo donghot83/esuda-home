@@ -48,9 +48,9 @@ function driverStatus_(date) {
   return out;
 }
 
-/* 2026-11-17 속도: 만든 목록을 서버 캐시에 1분 보관 (같은 날 다시 열기·날짜 넘기기 즉시).
- * 완료·사진·준비완료·장부 추가 때 그날 것을 지우고, [새로고침]은 항상 새로 만든다(fresh). */
-var DRIVER_CACHE_SEC = 60;
+/* 2026-11-17 속도: 만든 목록을 서버 캐시에 보관 → 저장본을 바로 주고(cached:true), 화면이 뒤에서 fresh 로 다시 받아 최신화.
+ * 완료·사진·준비완료·장부 추가·동선 확정 때 그날 것을 지우고, [새로고침]은 항상 새로 만든다(fresh). */
+var DRIVER_CACHE_SEC = 1800; // 2026-11-17: 장부 파일 열기가 0.3~4초라 저장본을 먼저 주고, 화면이 뒤에서 fresh 로 최신화
 function driverCacheClear_(date) { try { CacheService.getScriptCache().remove('drv_' + fmtDate_(date)); } catch (e) {} }
 
 /** {action:'driverList', key, date?, fresh?} → 그날 수거 목록 */
