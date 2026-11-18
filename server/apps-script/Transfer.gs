@@ -88,7 +88,7 @@ function makeTransferFile(opts) {
     if (!lid) return { error: 'no_ledger' };
     var lss = null, unit = transferUnitPrice_();
     var now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
-    var rows = [], check = [], marks = [], skipped = [], free = 0, total = 0;
+    var rows = [], check = [], marks = [], skipped = [], free = 0, total = 0, kakao = [], kakaoTotal = 0;
     for (var i = 1; i < data.length; i++) {
       var r = data[i];
       if (String(r[col('확정상태')]) !== '확정') continue;
@@ -105,7 +105,14 @@ function makeTransferFile(opts) {
       var bank = String(r[col('은행')]), code = BANK_CODES[bank];
       var acct = digitsOnly_(r[col('계좌번호')]);
       if (col('무상희망') >= 0 && String(r[col('무상희망')]) === '예') { free++; marks.push({ row: i + 1, file: '', state: '무상수거(고객 희망)', rid: rid, lr: lr }); continue; }
-      if (!acct && String(r[col('출처')]) === '카톡·직원') { skipped.push({ 예약번호: rid, 이유: '카톡 예약 — 계좌는 채팅 확인 후 따로 이체 (알림톡은 계좌 넣은 뒤 이체 파일 때)' }); continue; }
+      // 2026-11-18 대표 결정: 카톡 예약은 이체는 따로(파일엔 없음), 매입 정산 알림톡만 이체 파일 만들 때 같이
+      if (!acct && String(r[col('출처')]) === '카톡·직원') {
+        var kp = typeof alimSettlePlan_ === 'function' ? alimSettlePlan_(rid, lr, pa.amount, '', true) : { skip: 'none' };
+        if (kp.skip === 'settle_tpl') { skipped.push({ 예약번호: rid, 이유: '카톡 예약 — 매입 정산 알림톡 템플릿 승인 전이라 보류 (이체는 따로)' }); continue; }
+        kakao.push({ rid: rid, amount: pa.amount }); kakaoTotal += pa.amount;
+        marks.push({ row: i + 1, state: '따로이체(카톡)', rid: rid, lr: lr, amount: pa.amount });
+        continue;
+      }
       if (!acct) { skipped.push({ 예약번호: rid, 이유: '계좌 없음 — 고객에게 계좌를 받아 예약 시트에 넣어 주세요' }); continue; }
       if (!code || acct.length < 6) { skipped.push({ 예약번호: rid, 이유: '은행·계좌 확인 필요' }); continue; }
       var holder = String(r[col('예금주')] || r[col('이름')]);
@@ -117,8 +124,8 @@ function makeTransferFile(opts) {
       check.push(rec); total += pa.amount;
       marks.push({ row: i + 1, state: '이체파일생성', rid: rid, lr: lr, amount: pa.amount });
     }
-    var res = { count: rows.length, total: total, free: free, skipped: skipped, url: '' };
-    if (opts.dryRun || (!rows.length && !free)) { res.preview = check; res.marks = marks; return res; }
+    var res = { count: rows.length, total: total, free: free, kakao: kakao.length, kakaoTotal: kakaoTotal, skipped: skipped, url: '' };
+    if (opts.dryRun || !marks.length) { res.preview = check; res.marks = marks; return res; }
     var fileName = '';
     if (rows.length) {
       fileName = '[신한 다건이체] ' + now;
@@ -139,6 +146,7 @@ function makeTransferFile(opts) {
       if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0, /고객 희망/.test(m.state) ? 'wish' : ''); } catch (e) { logError_('알림톡(무상수거)', e); } }
       // 2026-11-16 대표 결정: 입금 '예정' 안내를 이체 파일 만들 때 먼저 보내고, 송금은 그 뒤에
       if (m.state === '이체파일생성' && m.amount > 0) { try { alimSettled_(m.rid, m.lr, m.amount); } catch (e) { logError_('알림톡(입금 예정)', e); } }
+      if (m.state === '따로이체(카톡)') { try { alimSettled_(m.rid, m.lr, m.amount, '', true); } catch (e) { logError_('알림톡(카톡 매입 정산)', e); } }
     });
     return res;
   } finally { lock.releaseLock(); }
@@ -171,9 +179,9 @@ function settlePreview_() {
   if (r.error) return r;
   var conf = alimConf_(), tc = {}, rows = [];
   (r.marks || []).forEach(function (m) {
-    var bk = bookRowByRid_(m.rid), paid = m.state === '이체파일생성', amt = paid ? m.amount : 0;
-    var p = alimSettlePlan_(m.rid, m.lr, amt, /고객 희망/.test(m.state) ? 'wish' : '');
-    var row = { '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(m.rid), '이름': bk ? bk.get('이름') : '', '처리': paid ? '이체' : m.state,
+    var kk = m.state === '따로이체(카톡)', bk = bookRowByRid_(m.rid), paid = m.state === '이체파일생성' || kk, amt = paid ? m.amount : 0;
+    var p = alimSettlePlan_(m.rid, m.lr, amt, /고객 희망/.test(m.state) ? 'wish' : '', kk);
+    var row = { '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(m.rid), '이름': bk ? bk.get('이름') : '', '처리': kk ? '카톡 — 이체는 따로 (파일에 없음)' : paid ? '이체' : m.state,
       '금액': paid ? amt : 0, '알림톡': '', '받는번호': '', '문구': '', '버튼': '' };
     if (p.skip) row['알림톡'] = p.skip === 'already' ? '이미 보냄 — 다시 안 감' : p.skip === 'wish_tpl' ? '안 감 — 무상 희망 알림톡 템플릿 승인 전' : '예약 없음';
     else {
@@ -191,12 +199,12 @@ function settlePreview_() {
     var bk = bookRowByRid_(s['예약번호']);
     rows.push({ '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(s['예약번호']), '이름': bk ? bk.get('이름') : '', '처리': '빠짐 — ' + s['이유'], '금액': '', '알림톡': '안 감', '받는번호': '', '문구': '', '버튼': '' });
   });
-  return { ok: true, count: r.count, total: r.total, free: r.free, skipped: (r.skipped || []).length, rows: rows };
+  return { ok: true, count: r.count, total: r.total, free: r.free, kakao: r.kakao, kakaoTotal: r.kakaoTotal, skipped: (r.skipped || []).length, rows: rows };
 }
 function menuSettlePreview_() {
   var ui = SpreadsheetApp.getUi(), r = writeSettlePreview_();
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
-  ui.alert('정산 미리보기 (아직 아무것도 안 보냈어요)\n\n이체 ' + r.count + '건, 합계 ' + Number(r.total).toLocaleString('ko-KR') + '원\n무상수거 ' + r.free + '건' + (r.skipped ? '\n빠짐 ' + r.skipped + '건 (주황색 줄)' : '') +
+  ui.alert('정산 미리보기 (아직 아무것도 안 보냈어요)\n\n이체 ' + r.count + '건, 합계 ' + Number(r.total).toLocaleString('ko-KR') + '원\n무상수거 ' + r.free + '건' + (r.kakao ? '\n카톡 예약 ' + r.kakao + '건 ' + Number(r.kakaoTotal).toLocaleString('ko-KR') + '원 — 알림톡만, 이체는 따로' : '') + (r.skipped ? '\n빠짐 ' + r.skipped + '건 (주황색 줄)' : '') +
     '\n\n「정산미리보기」 탭에서 고객별 알림톡 문구를 확인하세요. 버튼 링크를 눌러 고객이 보게 될 사진 페이지도 볼 수 있어요.\n괜찮으면 「신한 다건이체 파일 만들기」를 누르면 그때 파일이 생기고 알림톡이 나가요.');
 }
 /** '정산미리보기' 탭에 쓰기 (메뉴·편집기 공용) */
@@ -243,6 +251,7 @@ function menuMakeTransfer_() {
   var ui = SpreadsheetApp.getUi(), r = makeTransferFile();
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
   var msg = '이체 대상 ' + r.count + '건, 합계 ' + r.total.toLocaleString() + '원\n무상수거 ' + r.free + '건';
+  if (r.kakao) msg += '\n\n카톡 예약 ' + r.kakao + '건 ' + Number(r.kakaoTotal).toLocaleString('ko-KR') + '원 — 매입 정산 알림톡만 보냈어요. 이체는 따로 해 주세요 (파일에 없음).';
   if (r.skipped.length) msg += '\n\n확인 필요 ' + r.skipped.length + '건:\n' + r.skipped.map(function (s) { return s.예약번호 + ' - ' + s.이유; }).join('\n');
   if (r.url) {
     msg += '\n\n파일: ' + r.url + '\n\n엑셀 바로 받기: ' + r.url.replace(/\/edit.*$/, '') + '/export?format=xlsx' +

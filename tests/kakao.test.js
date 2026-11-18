@@ -70,3 +70,32 @@ test('번호가 이상하거나 취소된 줄·연락처 칸이 없는 장부는
   assert.strictEqual(e.ctx.kakaoIntake_(new Date('2026-11-18T03:05:00Z')), 0);
   assert.strictEqual(L[2][12], '1234');
 });
+
+test('2026-11-18 카톡 예약 정산: 번호 적기 전 계량·사진도 이어지고, 이체 파일엔 없이 매입 정산 알림톡만 (템플릿 승인 전엔 보류)', () => {
+  const IMG = Buffer.from('가짜').toString('base64');
+  const run = props => {
+    const L0 = [HEAD.slice(0, 6).concat(['무상제외'], HEAD.slice(6)), (() => { const r = [1, D('2026-11-16'), '카톡정산', '은평구', '가상로 3', '', '', '', '', '', '', '', '']; return r; })()];
+    const e = createEnv({ now: NOW, ledger: { '11월 매입금액': L0 }, props: Object.assign({}, READY, { WEIGH_KEY: 'WEIGHKEY12' }, props) });
+    const L = e.ledger['11월 매입금액'].rows;
+    e.ctx.setupKakaoPhone();
+    const id = 'K:카톡정산|가상로 3';
+    assert.strictEqual(e.post({ action: 'weighSave', key: 'WEIGHKEY12', date: '2026-11-16', id, bags: 2, weight: 30, withLoss: true, loss: 1 }).ok, true);
+    assert.strictEqual(e.post({ action: 'weighPhoto', key: 'WEIGHKEY12', date: '2026-11-16', id, kind: '계량', data: IMG }).ok, true);
+    const memoCol = L[0].indexOf('메모'), phoneCol = L[0].indexOf('연락처');
+    L[1][phoneCol] = '010-7777-8888';
+    assert.strictEqual(e.ctx.kakaoIntake_(new Date('2026-11-18T03:05:00Z')), 1);   // 이틀 전 줄도 등록
+    const rid = /ESD-\d{6}-[A-Z0-9]{4}/.exec(String(L[1][memoCol]))[0];
+    assert.strictEqual(e.ctx.weighPhotos_(null, rid, '계량').length, 1);            // 사진이 예약번호로 이어짐
+    L[1][L[0].indexOf('금액')] = 29 * 250 - 200;
+    return { e, rid, r: e.ctx.makeTransferFile() };
+  };
+  let { e, r } = run({});
+  assert.strictEqual(r.count, 0); assert.strictEqual(r.kakao, 0);
+  assert.ok(r.skipped.some(s => /승인 전이라 보류/.test(s.이유)));
+  assert.ok(!e.fetches.some(f => f.body && f.body.messages && f.body.messages[0].to === '01077778888'));
+  ({ e, r } = run({ TPL_SETTLE: 'T_LOSS' }));
+  assert.strictEqual(r.count, 0); assert.strictEqual(r.kakao, 1); assert.strictEqual(r.kakaoTotal, 7050); assert.strictEqual(r.url, '');
+  const m = e.fetches.map(f => f.body && f.body.messages && f.body.messages[0]).filter(Boolean).find(x => x.to === '01077778888' && x.kakaoOptions.templateId === 'T_LOSS');
+  assert.ok(m); assert.strictEqual(m.kakaoOptions.variables['#{매입금액}'], '7,050'); assert.strictEqual(m.kakaoOptions.variables['#{정산중량}'], '29');
+  assert.strictEqual(e.ctx.makeTransferFile().kakao, 0);                            // 두 번 안 감
+});

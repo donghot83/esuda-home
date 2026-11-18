@@ -31,7 +31,7 @@ function kakaoKnown_() {
 /** 이번 달·다음 달 장부 시트 (중복 없이) */
 function kakaoSheets_(today) {
   var R = rules_(), seen = {}, out = [];
-  [0, 31].forEach(function (k) {
+  [-14, 0, 31].forEach(function (k) {   // 지난 2주가 지난달이면 지난달 시트도
     var d = R.addDays(today, k), lss = ledgerOpen_(d), sh = lss && ledgerMonthSheet_(lss, d);
     if (!sh) return;
     var key = d.slice(0, 4) + sh.getName();
@@ -43,7 +43,8 @@ function kakaoSheets_(today) {
 
 /** 5분 동기화 때: 장부 '연락처'가 적힌 카톡·직원 줄 → 예약 등록 + 번호 가리기 + (새 예약이면) 예약 완료 알림톡. 반환 등록 수 */
 function kakaoIntake_(now) {
-  var R = rules_(), today = R.todayKST(now || new Date()), from = R.addDays(today, -1), n = 0, known = null;
+  // 2026-11-18: 정산 알림톡도 보내려고 지난 2주 줄까지 (번호는 직원이 일부러 적을 때만 있음, 지난 날짜는 예약 완료 알림톡 안 감)
+  var R = rules_(), today = R.todayKST(now || new Date()), from = R.addDays(today, -14), n = 0, known = null;
   kakaoSheets_(today).forEach(function (x) {
     var sh = x.sh, v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
     if (!LC.phone) return;
@@ -63,6 +64,7 @@ function kakaoIntake_(now) {
         '이름': name, '연락처': phone, '시군구': area, '도로명주소': full, '상세주소': '', '요청사항': memo, '출처': '카톡·직원' };
       b.sh.appendRow(b.hdr.map(function (h) { var y = row[h]; return h === '연락처' ? "'" + y : (y === undefined ? '' : y); }));
       sh.getRange(i + 1, LC.memo).setValue(rid + ' 카톡' + (memo ? ' / ' + memo : ''));
+      try { kakaoMoveId_('K:' + name + '|' + addr, rid, date); } catch (e) { logError_('카톡 예약 기록 옮기기', e); }   // 번호 적기 전에 한 수거·계량·사진 기록도 이 예약으로
       sh.getRange(i + 1, LC.phone).setNumberFormat('@').setValue(maskPhone_(phone));
       driverCacheClear_(date);
       if (!known) known = kakaoKnown_();
@@ -73,6 +75,16 @@ function kakaoIntake_(now) {
     }
   });
   return n;
+}
+
+/** 2026-11-18: 번호를 적기 전엔 기사님·계량 화면이 이 줄을 'K:이름|주소'로 기록함 → 예약번호로 바꿔 사진·무게·완료 기록이 이어지게 */
+function kakaoMoveId_(kid, rid, date) {
+  [[SHEET_DRIVER, 0], [SHEET_WEIGH, 0], [SHEET_WEIGH_PHOTO, 0], [SHEET_PICKPHOTO, 0]].forEach(function (t) {
+    var sh = ss_().getSheetByName(t[0]);
+    if (!sh) return;
+    var v = sh.getDataRange().getValues();
+    for (var i = 1; i < v.length; i++) if (String(v[i][1]) === kid && fmtDate_(v[i][0]) === date) sh.getRange(i + 1, 2).setValue(rid);
+  });
 }
 
 /** 한 번만: 이번 달·다음 달 장부 메모 오른쪽에 '연락처' 머리글 + 지금 있는 카톡 예약을 '기존'으로 기록. 반환 [{시트, 칸, 기존}] */

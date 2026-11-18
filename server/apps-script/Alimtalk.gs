@@ -136,15 +136,15 @@ function alimPicked_(rid) {
 /** ③ 입금 예정 / ④ 무상수거 — lr = 장부 줄 {weight, excl, loss}, amount = 입금액(0이면 무상), why = 'wish'(무상 희망)
  *  2026-11-17: 유상 매입 → TPL_SETTLE([계량 사진 보기]) / 15kg 미만 무상 → TPL_FREE_UNDER([계근 사진 보기]) / 무상 희망 → TPL_FREE_WISH(사진 없음)
  *  새 템플릿이 아직 없거나 계량 사진이 없으면 예전 템플릿으로 */
-function alimSettled_(rid, lr, amount, why) {
-  var p = alimSettlePlan_(rid, lr, amount, why);
+function alimSettled_(rid, lr, amount, why, noAcct) {
+  var p = alimSettlePlan_(rid, lr, amount, why, noAcct);
   if (p.skip) return p.skip === 'already' ? { ok: true, skipped: 'already' } : { ok: false, skipped: p.skip };
   return sendAlimtalk_(p.kind, rid, p.phone, p.vars);
 }
 
 /** 정산 알림톡을 '무엇으로·누구에게·어떤 값으로' 보낼지 (보내지 않음) → {kind, phone, vars} | {skip}
  *  2026-11-18: 미리보기(정산 미리보기 메뉴)와 실제 발송이 같은 판단을 쓰도록 나눔 */
-function alimSettlePlan_(rid, lr, amount, why) {
+function alimSettlePlan_(rid, lr, amount, why, noAcct) {   // noAcct: 카톡 예약(계좌 없음, 따로 이체) — 계좌 줄 있는 입금 예정 템플릿은 못 씀
   var r = bookRowByRid_(rid);
   if (!r) return { skip: 'no_booking' };
   var w = Math.round(((+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0)) * 100) / 100;   // 정산 중량 = 무게 - 무상제외 - 로스
@@ -159,11 +159,12 @@ function alimSettlePlan_(rid, lr, amount, why) {
     // 무상제외·로스가 있는지에 따라 그 줄이 있는 템플릿으로 (해당 템플릿이 아직 없으면 로스 줄 있는 TPL_SETTLE)
     var want = ex > 0 ? (lo > 0 ? 'settleBoth' : 'settleExcl') : (lo > 0 ? 'settle' : 'settleBase');
     var sk = c.tpl(want) ? want : (c.tpl('settle') ? 'settle' : '');
-    if (sk && hasPhoto) {
+    if (sk && (hasPhoto || noAcct)) {
       return plan(sk, { '#{수거중량}': String(gross), '#{무상제외}': String(ex), '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
         '#{로스}': String(lo), '#{로스금액}': Number(lo * lossUnitPrice_()).toLocaleString('ko-KR'), '#{매입금액}': Number(amount).toLocaleString('ko-KR'),
         '#{사진코드}': pickPhotoCode_(rid, true) });
     }
+    if (noAcct) return { skip: 'settle_tpl' };   // 매입 정산 템플릿 승인 전 — 카톡 고객은 계좌 줄이 비게 되므로 안 보냄
     var vars = { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
       '#{무게}': String(w), '#{단가}': String(transferUnitPrice_()), '#{금액}': Number(amount).toLocaleString('ko-KR'),
       '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) };
