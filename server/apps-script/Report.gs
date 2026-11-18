@@ -25,10 +25,12 @@ function runChecks_() {
   var R = rules_(), now = new Date(), today = R.todayKST(now);
   var b = bookData_(), sc = loadSchedule_(), counts = countsByDate_(b.data);
   var issues = [], ok = [], pending = [], seen = {};
-  var cId = b.col('예약번호'), cDate = b.col('수거일'), cSt = b.col('확정상태'), cSync = b.col('장부반영'), cZone = b.col('구역'), cAt = b.col('신청시각'), cPh = b.col('사진');
-  var bad = { parity: [], weekend: [], closed: [], lost: [], cancelLeft: [] }, todayNew = 0, photos = 0, upcoming = 0;
+  var cId = b.col('예약번호'), cDate = b.col('수거일'), cSt = b.col('확정상태'), cSync = b.col('장부반영'), cZone = b.col('구역'), cAt = b.col('신청시각'), cPh = b.col('사진'), cSrc = b.col('출처');
+  var bad = { parity: [], weekend: [], closed: [], lost: [], cancelLeft: [] }, todayNew = 0, kakaoNew = 0, photos = 0, upcoming = 0;
   for (var i = 1; i < b.data.length; i++) {
     var r = b.data[i], rid = String(r[cId]), d = fmtDate_(r[cDate]), st = String(r[cSt]);
+    // 2026-11-18: 카톡·직원 예약(장부 연락처로 등록)은 직원이 정한 날짜라 신청 규칙 점검에서 빼고 따로 셈
+    if (String(r[cSrc] || '') === '카톡·직원') { if (ymd10_(r[cAt]) === today) kakaoNew++; continue; }
     if (ymd10_(r[cAt]) === today) { todayNew++; if (String(r[cPh] || '')) photos++; }
     if (!d || d < today) continue;
     if (st === '취소') {
@@ -97,7 +99,7 @@ function runChecks_() {
     if (String(rr[cSt]) !== '확정' || fmtDate_(rr[cDate]) !== next) continue;
     n++; var a = ledgerArea_({ sigungu: rr[b.col('시군구')] }); byArea[a] = (byArea[a] || 0) + 1;
   }
-  return { issues: issues, ok: ok, pending: pending, today: today, todayNew: todayNew, photos: photos, counts: counts,
+  return { issues: issues, ok: ok, pending: pending, today: today, todayNew: todayNew, kakaoNew: kakaoNew, photos: photos, counts: counts,
     tomorrow: { date: next, page: n, total: counts[next] || 0, byArea: byArea } };
 }
 
@@ -185,7 +187,7 @@ function dailyReport() {
       return '■ 오늘 처리한 취소: ' + (t.length ? t.length + '건 — ' + t.join(', ') : '없음');
     })(),
     (function () { try { return visitSummary_(chk.today).text; } catch (e) { return '■ 신청 화면 방문: 집계 실패'; } })(),
-    '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)',
+    '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)' + (chk.kakaoNew ? ' + 카톡 예약 연락처 등록 ' + chk.kakaoNew + '건' : ''),
     '■ 내일 ' + dayLabel_(t.date) + ' 수거: 전체 ' + t.total + '건 (신청페이지 ' + t.page + '건' + (areas ? ': ' + areas : '') + ')',
     '■ 앞으로 7일 (장부 포함): ' + next7.join(' / '),
     '',
