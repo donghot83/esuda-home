@@ -175,7 +175,7 @@ function settlePreview_() {
     var p = alimSettlePlan_(m.rid, m.lr, amt, /고객 희망/.test(m.state) ? 'wish' : '');
     var row = { '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(m.rid), '이름': bk ? bk.get('이름') : '', '처리': paid ? '이체' : m.state,
       '금액': paid ? amt : 0, '알림톡': '', '받는번호': '', '문구': '', '버튼': '' };
-    if (p.skip) row['알림톡'] = p.skip === 'already' ? '이미 보냄 — 다시 안 감' : '예약 없음';
+    if (p.skip) row['알림톡'] = p.skip === 'already' ? '이미 보냄 — 다시 안 감' : p.skip === 'wish_tpl' ? '안 감 — 무상 희망 알림톡 템플릿 승인 전' : '예약 없음';
     else {
       var id = conf.tpl(p.kind), to = String(p.phone || '').replace(/[^0-9]/g, '');
       if (!(id in tc)) tc[id] = solapiTemplate_(id);

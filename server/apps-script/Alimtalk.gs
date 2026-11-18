@@ -162,7 +162,7 @@ function alimSettlePlan_(rid, lr, amount, why) {
     return plan('paid', vars);
   }
   if (alimSent_('free', rid) || alimSent_('freeUnder', rid) || alimSent_('freeWish', rid)) return { skip: 'already' };
-  if (why === 'wish' && c.tpl('freeWish')) return plan('freeWish', {});   // 문구에 변수 없음
+  if (why === 'wish') return c.tpl('freeWish') ? plan('freeWish', {}) : { skip: 'wish_tpl' };   // 문구에 변수 없음. 2026-11-18: 예전 무상수거 문구는 '15kg 미만이라 무상'이라 희망 고객에겐 안 맞음 → 템플릿 승인 전엔 안 보냄
   if (why !== 'wish' && c.tpl('freeUnder') && hasPhoto) return plan('freeUnder', { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
   return plan('free', { '#{이름}': r.get('이름'), '#{무게}': String(w) });
 }

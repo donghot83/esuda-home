@@ -222,3 +222,18 @@ test('2026-11-18 정산 미리보기: 보내지 않고 고객별 알림톡 문�
   const m = e.fetches.map(f => f.body && f.body.messages && f.body.messages[0]).filter(Boolean).find(x => x.kakaoOptions.templateId === 'KA01TPPAIDPHOTO');
   assert.ok(m); assert.ok(me['버튼'].endsWith(m.kakaoOptions.variables['#{사진코드}']));
 });
+
+test('2026-11-18 무상 희망(15kg 이상) 고객: 무상 희망 템플릿 승인 전엔 "15kg 미만" 무상수거 문구를 보내지 않음', () => {
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-16', name: '희망큰손님', noPay: true, bank: '', account: '', holder: '', amount: R.AMOUNTS[0] }));
+  const e = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD] }, props: READY });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  q(e, { action: 'weighSave', id: a.reservationId, bags: 2, weight: 27 });
+  rowOf(L, a.reservationId)[8] = 27 * 250;
+  const pv = e.ctx.settlePreview_().rows.find(x => x['이름'] === '희망큰손님');
+  assert.match(pv['알림톡'], /승인 전/);
+  const r = e.ctx.makeTransferFile();
+  assert.strictEqual(r.free, 1);
+  assert.ok(!e.fetches.some(f => f.body && f.body.messages && f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE'));
+});
