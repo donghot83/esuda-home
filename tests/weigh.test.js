@@ -237,3 +237,29 @@ test('2026-11-18 무상 희망(15kg 이상) 고객: 무상 희망 템플릿 승�
   assert.strictEqual(r.free, 1);
   assert.ok(!e.fetches.some(f => f.body && f.body.messages && f.body.messages[0].kakaoOptions.templateId === 'KA01TPFREE'));
 });
+
+test('2026-11-18 정산 알림톡: 무상제외·로스가 있을 때만 그 줄이 있는 템플릿으로 (없는 템플릿은 TPL_SETTLE로)', () => {
+  const P = Object.assign({}, READY, { TPL_SETTLE: 'T_LOSS', TPL_SETTLE_BASE: 'T_BASE', TPL_SETTLE_EXCL: 'T_EXCL', TPL_SETTLE_BOTH: 'T_BOTH', TPL_FREE_UNDER: 'T_UNDER', TPL_FREE_UNDER_EXCL: 'T_UNDEREX' });
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD.slice(0, 6).concat(['무상제외'], HEAD.slice(6))] }, props: {} });
+  const cs = [['기본', 30, '', ''], ['로스만', 30, '', 2], ['제외만', 30, 3, ''], ['둘다', 30, 3, 2], ['적은제외', 16, 3, '']].map(([n, w, x, l], i) =>
+    ({ n, w, x, l, a: e0.post(sub({ date: '2026-11-16', name: n, phone: '010-1111-000' + i })) }));
+  const e = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD.slice(0, 6).concat(['무상제외'], HEAD.slice(6))] }, props: P });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  cs.forEach(c => {
+    assert.strictEqual(q(e, { action: 'weighSave', id: c.a.reservationId, bags: 1, weight: c.w, withLoss: true, loss: c.l, excl: c.x }).ok, true, c.n);
+    q(e, { action: 'weighPhoto', id: c.a.reservationId, kind: '계량', data: IMG });
+    const row = L.find(x => x && String(x[11] || '').includes(c.a.reservationId));
+    const fin = c.w - (+c.x || 0) - (+c.l || 0); row[9] = fin >= 15 ? fin * 250 - (+c.l || 0) * 200 : '무상수거';
+  });
+  e.ctx.makeTransferFile();
+  const by = n => e.fetches.map(f => f.body && f.body.messages && f.body.messages[0]).filter(Boolean).find(m => m.to === '0101111000' + cs.findIndex(c => c.n === n));
+  assert.strictEqual(by('기본').kakaoOptions.templateId, 'T_BASE');
+  assert.strictEqual(by('로스만').kakaoOptions.templateId, 'T_LOSS');
+  assert.strictEqual(by('제외만').kakaoOptions.templateId, 'T_EXCL');
+  const both = by('둘다').kakaoOptions;
+  assert.strictEqual(both.templateId, 'T_BOTH');
+  assert.deepStrictEqual([both.variables['#{수거중량}'], both.variables['#{무상제외}'], both.variables['#{로스}'], both.variables['#{정산중량}'], both.variables['#{매입금액}']], ['30', '3', '2', '25', '5,850']);
+  const u = by('적은제외').kakaoOptions;
+  assert.strictEqual(u.templateId, 'T_UNDEREX'); assert.strictEqual(u.variables['#{정산중량}'], '13');
+});

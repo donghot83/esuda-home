@@ -28,7 +28,14 @@ var ALIM_KINDS = { booked: { prop: 'TPL_BOOKED', label: '예약 완료' }, picke
   // 2026-11-17 대표 문구: ③ 유상 매입 / ② 15kg 미만 무상(계근 사진) / ① 무상 희망(사진 없음)
   settle: { prop: 'TPL_SETTLE', label: '매입 정산', opt: true },
   freeUnder: { prop: 'TPL_FREE_UNDER', label: '무상수거(15kg 미만)', opt: true },
-  freeWish: { prop: 'TPL_FREE_WISH', label: '무상수거(희망)', opt: true } }; // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
+  freeWish: { prop: 'TPL_FREE_WISH', label: '무상수거(희망)', opt: true },
+  // 2026-11-18 대표 결정: 무상제외·로스 줄은 있을 때만 보이게 → 경우별 템플릿 (TPL_SETTLE = 로스만 있는 경우)
+  settleBase: { prop: 'TPL_SETTLE_BASE', label: '매입 정산(기본)', opt: true },
+  settleExcl: { prop: 'TPL_SETTLE_EXCL', label: '매입 정산(무상제외)', opt: true },
+  settleBoth: { prop: 'TPL_SETTLE_BOTH', label: '매입 정산(무상제외·로스)', opt: true },
+  freeUnderExcl: { prop: 'TPL_FREE_UNDER_EXCL', label: '무상수거(15kg 미만·무상제외)', opt: true } };
+var SETTLE_KINDS_ = ['paid', 'paidPhoto', 'settle', 'settleBase', 'settleExcl', 'settleBoth'];
+var FREE_KINDS_ = ['free', 'freeUnder', 'freeUnderExcl', 'freeWish']; // 2026-11-16 [수거 사진 보기] 버튼 있는 픽업 완료
 
 function alimConf_() {
   var p = PropertiesService.getScriptProperties();
@@ -143,12 +150,18 @@ function alimSettlePlan_(rid, lr, amount, why) {
   var w = Math.round(((+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0)) * 100) / 100;   // 정산 중량 = 무게 - 무상제외 - 로스
   var c = alimConf_(), hasPhoto = typeof weighPhotos_ === 'function' && weighPhotos_(null, rid, '계량').length > 0, ph = r.get('연락처');
   var plan = function (kind, vars) { return { kind: kind, phone: ph, vars: vars }; };
+  var ex = Math.round((+lr.excl || 0) * 100) / 100, lo = Math.round((+lr.loss || 0) * 100) / 100, gross = Math.round((+lr.weight || 0) * 100) / 100;
+  var logSh = ss_().getSheetByName(SHEET_ALIM), logV = logSh ? logSh.getDataRange().getValues() : [];
+  var sent = function (ks) { var labs = ks.map(function (k) { return ALIM_KINDS[k].label; });
+    return logV.some(function (x) { return String(x[2]) === rid && labs.indexOf(String(x[1])) >= 0 && /^성공/.test(String(x[4])); }); };
   if (amount > 0) {
-    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid) || alimSent_('settle', rid)) return { skip: 'already' };
-    if (c.tpl('settle') && hasPhoto) {
-      var lu = lossUnitPrice_(), loss = +lr.loss || 0;
-      return plan('settle', { '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
-        '#{로스}': String(loss), '#{로스금액}': Number(loss * lu).toLocaleString('ko-KR'), '#{매입금액}': Number(amount).toLocaleString('ko-KR'),
+    if (sent(SETTLE_KINDS_)) return { skip: 'already' };
+    // 무상제외·로스가 있는지에 따라 그 줄이 있는 템플릿으로 (해당 템플릿이 아직 없으면 로스 줄 있는 TPL_SETTLE)
+    var want = ex > 0 ? (lo > 0 ? 'settleBoth' : 'settleExcl') : (lo > 0 ? 'settle' : 'settleBase');
+    var sk = c.tpl(want) ? want : (c.tpl('settle') ? 'settle' : '');
+    if (sk && hasPhoto) {
+      return plan(sk, { '#{수거중량}': String(gross), '#{무상제외}': String(ex), '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
+        '#{로스}': String(lo), '#{로스금액}': Number(lo * lossUnitPrice_()).toLocaleString('ko-KR'), '#{매입금액}': Number(amount).toLocaleString('ko-KR'),
         '#{사진코드}': pickPhotoCode_(rid, true) });
     }
     var vars = { '#{이름}': r.get('이름'), '#{수거일}': R_dateLabel_(r.date('수거일')),
@@ -161,9 +174,10 @@ function alimSettlePlan_(rid, lr, amount, why) {
     }
     return plan('paid', vars);
   }
-  if (alimSent_('free', rid) || alimSent_('freeUnder', rid) || alimSent_('freeWish', rid)) return { skip: 'already' };
+  if (sent(FREE_KINDS_)) return { skip: 'already' };
   if (why === 'wish') return c.tpl('freeWish') ? plan('freeWish', {}) : { skip: 'wish_tpl' };   // 문구에 변수 없음. 2026-11-18: 예전 무상수거 문구는 '15kg 미만이라 무상'이라 희망 고객에겐 안 맞음 → 템플릿 승인 전엔 안 보냄
-  if (why !== 'wish' && c.tpl('freeUnder') && hasPhoto) return plan('freeUnder', { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
+  if (ex > 0 && c.tpl('freeUnderExcl') && hasPhoto) return plan('freeUnderExcl', { '#{수거중량}': String(gross), '#{무상제외}': String(ex), '#{정산중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
+  if (c.tpl('freeUnder') && hasPhoto) return plan('freeUnder', { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
   return plan('free', { '#{이름}': r.get('이름'), '#{무게}': String(w) });
 }
 
@@ -176,10 +190,16 @@ var ALIM_TEXTS_ = (function () {
   var PAIDHEAD = "안녕하세요.\n우리집 의류수거함 '이수다'예요 😃\n\n#{이름}님이 #{수거일}에 보내주신 의류는 아래와 같이 매입 금액을 적용하여 계좌로 입금될 예정이에요.\n다음에도 우리집 의류수거함 '이수다'를 이용해 주세요. 감사합니다 😁\n\n✔ 매입 정산 중량: #{무게}kg\n✔ 기본 매입금액: 1kg당 #{단가}원\n";
   var SETTLE = HI + '고객님의 의류 매입 정산이 완료되었습니다.\n\n✔ 정산 중량 : #{정산중량}kg\n✔ 매입 단가 : #{매입단가}원/kg\n✔ 로스(폐기물) 차감 : #{로스}kg (#{로스금액}원)\n✔ 총 매입금액 : #{매입금액}원\n\n매입금액은 신청하신 계좌로 입금될 예정입니다.\n센터에서 무게를 잰 사진은 아래 [계량 사진 보기]에서 확인하실 수 있어요.\n\n이수다를 이용해 주셔서 감사합니다.';
   var UNDER = HI + '고객님의 의류는 15kg 미만으로 확인되어 무상수거 처리되었습니다.\n\n✔ 수거 중량 : #{수거중량}kg\n\n센터에서 무게를 잰 사진은 아래 [계근 사진 보기]에서 확인하실 수 있어요.\n\n보내주신 옷들은 소중히 활용하겠습니다. 💚';
-  var WISH = HI + '고객님의 의류가 무상수거 완료되었습니다.\n\n보내주신 소중한 옷들은 새로운 쓰임을 찾을 수 있도록 잘 활용하겠습니다. 💚\n\n이수다를 이용해 주셔서 감사합니다.';
+  var SET0 = HI + '고객님의 의류 매입 정산이 완료되었습니다.\n\n', EXN = '\n\n무상제외(박스·이불 등)는 매입 무게에서만 빼고, 금액을 따로 차감하지 않아요.';
+  var SETT = '\n\n매입금액은 신청하신 계좌로 입금될 예정입니다.\n센터에서 무게를 잰 사진은 아래 [계량 사진 보기]에서 확인하실 수 있어요.\n\n이수다를 이용해 주셔서 감사합니다.' + ASK;
+  var WISH = HI +'고객님의 의류가 무상수거 완료되었습니다.\n\n보내주신 소중한 옷들은 새로운 쓰임을 찾을 수 있도록 잘 활용하겠습니다. 💚\n\n이수다를 이용해 주셔서 감사합니다.';
   return {
     KA01TP261118031356707w2I7x2NMJTb: { c: SETTLE + ASK, b: [PH('계량 사진 보기')] },                             // 매입 정산 v6
     KA01TP261117075748184zBAwnfhofVB: { c: SETTLE + '\n다음에도 또 이용해 주세요! 💚', b: [PH('계량 사진 보기'), CHAT] },   // 매입 정산 v4
+    KA01TP261118060032973K3LTDQL140P: { c: SET0 + '✔ 정산 중량 : #{정산중량}kg\n✔ 매입 단가 : #{매입단가}원/kg\n✔ 총 매입금액 : #{매입금액}원' + SETT, b: [PH('계량 사진 보기')] },   // 매입 정산 v7 기본
+    KA01TP261118060034171HLPz3sSgYXk: { c: SET0 + '✔ 수거 중량 : #{수거중량}kg\n✔ 무상제외 : #{무상제외}kg\n✔ 정산 중량 : #{정산중량}kg\n✔ 매입 단가 : #{매입단가}원/kg\n✔ 총 매입금액 : #{매입금액}원' + EXN + SETT, b: [PH('계량 사진 보기')] },   // v7 무상제외
+    KA01TP261118060034926pCKqWPcTf2b: { c: SET0 + '✔ 수거 중량 : #{수거중량}kg\n✔ 무상제외 : #{무상제외}kg\n✔ 로스(폐기물) 차감 : #{로스}kg (#{로스금액}원)\n✔ 정산 중량 : #{정산중량}kg\n✔ 매입 단가 : #{매입단가}원/kg\n✔ 총 매입금액 : #{매입금액}원' + EXN + SETT, b: [PH('계량 사진 보기')] },   // v7 무상제외·로스
+    KA01TP261118060035893cs4BMGokFGH: { c: HI + '고객님의 의류는 매입 제외 물품을 뺀 중량이 15kg 미만으로 확인되어 무상수거 처리되었습니다.\n\n✔ 수거 중량 : #{수거중량}kg\n✔ 무상제외 : #{무상제외}kg\n✔ 정산 중량 : #{정산중량}kg\n\n센터에서 무게를 잰 사진은 아래 [계근 사진 보기]에서 확인하실 수 있어요.\n\n보내주신 옷들은 소중히 활용하겠습니다. 💚' + ASK, b: [PH('계근 사진 보기')] },   // 무상수거 안내 v6 (무상제외)
     KA01TP261118031357499CLeAts8S1ST: { c: UNDER + ASK, b: [PH('계근 사진 보기')] },                              // 무상수거 안내 v5
     KA01TP261117075747420kDYbmVTTUgV: { c: UNDER + '\n다음에도 이수다를 이용해 주세요!', b: [PH('계근 사진 보기'), CHAT] },  // 무상수거 안내 v3
     KA01TP261118031358284rBDNkqYYD1e: { c: WISH + ASK, b: [] },                                                  // 무상수거 완료 v3
