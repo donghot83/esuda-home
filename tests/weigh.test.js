@@ -263,3 +263,16 @@ test('2026-11-18 정산 알림톡: 무상제외·로스가 있을 때만 그 줄
   const u = by('적은제외').kakaoOptions;
   assert.strictEqual(u.templateId, 'T_UNDEREX'); assert.strictEqual(u.variables['#{정산중량}'], '13');
 });
+
+test('2026-11-18 카톡·직원 줄도 계량 화면으로 무게 넣으면 최종·금액·로스금액 수식이 생김 (직원이 적은 칸은 그대로)', () => {
+  const { e, L } = setup();
+  const k = q(e, { action: 'weighList' }).items.find(x => x.name === '카톡손님');
+  const row = L.find(x => x && x[2] === '카톡손님'), idx = L.indexOf(row) + 1;
+  assert.strictEqual(q(e, { action: 'weighSave', id: k.id, bags: 2, weight: 30, withLoss: true, loss: '' }).ok, true);
+  const f = row.f || {};
+  assert.ok(String(f[8]).startsWith('=IF(F' + idx + '=""'), String(f[8]));   // 최종 (8번째 칸)
+  assert.match(String(f[9]), /\*250-N\(G\d+\)\*200,"무상수거"/);       // 금액
+  row.f = {}; row[8] = 7000;                                            // 직원이 금액을 직접 적어 둔 줄
+  q(e, { action: 'weighSave', id: k.id, bags: 2, weight: 30, withLoss: true, loss: 1, force: true });
+  assert.ok(!(row.f || {})[8]); assert.strictEqual(row[8], 7000);
+});

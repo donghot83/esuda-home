@@ -52,6 +52,14 @@ function ledgerCalcFormulas_(row, c) {
            '=IF(N(' + L + ')=0,"",' + L + '*' + lu + ')']];
 }
 function setLedgerCalc_(sh, row) { var c = ledgerCols_(sh); sh.getRange(row, c.final, 1, 3).setFormulas(ledgerCalcFormulas_(row, c)); }
+/** 2026-11-18 대표 요청: 카톡·직원 줄도 계량 화면으로 무게를 넣으면 최종·금액·로스금액이 계산되게 — 세 칸이 모두 비어 있을 때만(직원 수식·숫자는 그대로). 반환 true = 채움 */
+function fillCalcIfEmpty_(sh, row) {
+  var c = ledgerCols_(sh), rg = sh.getRange(row, c.final, 1, 3), v = rg.getValues()[0];
+  var fm = rg.getFormulas ? rg.getFormulas()[0] : ['', '', ''];
+  for (var i = 0; i < 3; i++) if (String(v[i] == null ? '' : v[i]) !== '' || String(fm[i] || '') !== '') return false;
+  rg.setFormulas(ledgerCalcFormulas_(row, c));
+  return true;
+}
 /** 무상제외 칸에 값을 넣을 때: 그 줄 최종 수식이 무상제외를 안 빼고 있으면 표준 수식으로 (손으로 만든 다른 수식은 그대로) */
 function ensureFinalFormula_(sh, row) {
   var c = ledgerCols_(sh);

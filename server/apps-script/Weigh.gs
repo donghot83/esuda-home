@@ -157,7 +157,8 @@ function weighSave_(b) {
     var lossCheck = withLoss ? lossCheck_(f, w, loss, excl, b.force) : null;
     if (lossCheck) return lossCheck;   // 아무것도 안 쓰고 먼저 물어봄
     if (!hasCur || !sameKg_(cur, w)) f.sh.getRange(f.x.row, LEDGER_COL.weight).setValue(w);
-    var rec = { '번호': f.x.no, '이름': f.x.name, '봉지': bags, '무게': w, '계량시각': weighNow_() };
+    try { fillCalcIfEmpty_(f.sh, f.x.row); } catch (e) { logError_('장부 계산 수식', e); }   // 카톡·직원 줄도 최종·금액 자동
+    var rec ={ '번호': f.x.no, '이름': f.x.name, '봉지': bags, '무게': w, '계량시각': weighNow_() };
     if (withLoss) { lossWrite_(f, loss, excl); rec['로스'] = loss; rec['로스확인'] = 'Y'; rec['로스시각'] = weighNow_(); rec['무상제외'] = excl; }
     weighUpsert_(date, id, rec);
     driverCacheClear_(date);
