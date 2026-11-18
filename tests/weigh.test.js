@@ -195,3 +195,30 @@ test('2026-11-17 세 경우: 15kg 미만은 로스 없이 이체(무상 계근 �
   const pg = e.post({ action: 'pickupPhoto', code: u[0].kakaoOptions.variables['#{사진코드}'] });
   assert.strictEqual(pg.free, true); assert.strictEqual(pg.weigh.length, 1); assert.strictEqual(pg.loss.length, 0);
 });
+
+test('2026-11-18 정산 미리보기: 보내지 않고 고객별 알림톡 문구·버튼 링크·금액, 빠진 고객까지 보여 줌', () => {
+  const TPL = { KA01TPPAIDPHOTO: { content: '#{이름}님 #{무게}kg 총 #{금액}원 (로스 #{로스}kg)', status: 'APPROVED', buttons: [{ buttonName: '계량 사진 보기', linkMo: 'https://esuda.kr/photo/?c=#{사진코드}' }] } };
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-16', name: '미리고객' }));
+  const b = e0.post(sub({ date: '2026-11-16', name: '무게없음' }));
+  const e = createEnv({ now: NOW, ledger: { '11월 매입금액': [HEAD] }, props: READY, templates: TPL });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  q(e, { action: 'weighSave', id: a.reservationId, bags: 3, weight: 40, withLoss: true, loss: 2 });
+  q(e, { action: 'weighPhoto', id: a.reservationId, kind: '계량', data: IMG });
+  rowOf(L, a.reservationId)[8] = 38 * 250 - 2 * 200;
+  const sent0 = e.fetches.length;
+  const r = e.ctx.settlePreview_();
+  assert.strictEqual(e.fetches.length, sent0);                       // 아무것도 안 보냄
+  assert.strictEqual(r.count, 1); assert.strictEqual(r.total, 9100);
+  const me = r.rows.find(x => x['이름'] === '미리고객');
+  assert.strictEqual(me['처리'], '이체'); assert.strictEqual(me['알림톡'], '입금 예정(사진)');
+  assert.strictEqual(me['문구'], '미리고객님 38kg 총 9,100원 (로스 2kg)');
+  assert.match(me['버튼'], /^\[계량 사진 보기\] https:\/\/esuda\.kr\/photo\/\?c=[a-z0-9]{12}$/);
+  assert.strictEqual(me['받는번호'], '****3333');
+  assert.match(r.rows.find(x => x['이름'] === '무게없음')['처리'], /^빠짐/);
+  assert.strictEqual(e.sheet('예약').rows.slice(1).filter(x => String(x[e.sheet('예약').rows[0].indexOf('지급상태')] || '')).length, 0);   // 표시도 안 함
+  e.ctx.makeTransferFile();                                          // 실제로 만들면 같은 사진코드로 발송
+  const m = e.fetches.map(f => f.body && f.body.messages && f.body.messages[0]).filter(Boolean).find(x => x.kakaoOptions.templateId === 'KA01TPPAIDPHOTO');
+  assert.ok(m); assert.ok(me['버튼'].endsWith(m.kakaoOptions.variables['#{사진코드}']));
+});

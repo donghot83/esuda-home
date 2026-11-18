@@ -118,7 +118,7 @@ function makeTransferFile(opts) {
       marks.push({ row: i + 1, state: '이체파일생성', rid: rid, lr: lr, amount: pa.amount });
     }
     var res = { count: rows.length, total: total, free: free, skipped: skipped, url: '' };
-    if (opts.dryRun || (!rows.length && !free)) { res.preview = check; return res; }
+    if (opts.dryRun || (!rows.length && !free)) { res.preview = check; res.marks = marks; return res; }
     var fileName = '';
     if (rows.length) {
       fileName = '[신한 다건이체] ' + now;
@@ -161,6 +161,61 @@ function markTransferPaid(fileName) {
   return { updated: n };
 }
 
+/**
+ * 정산 미리보기 (2026-11-18 대표 요청) — 이체 파일을 만들면 누구에게 얼마를, 어떤 알림톡 문구로 보내게 되는지
+ * 파일·표시·발송 없이 '정산미리보기' 탭에 그대로 보여 줌. 확인 후 「신한 다건이체 파일 만들기」를 누르면 그때 실제로 나감.
+ */
+var PREVIEW_HEADERS = ['수거일', '예약번호', '이름', '처리', '금액', '알림톡', '받는번호', '문구', '버튼'];
+function settlePreview_() {
+  var r = makeTransferFile({ dryRun: true });
+  if (r.error) return r;
+  var conf = alimConf_(), tc = {}, rows = [];
+  (r.marks || []).forEach(function (m) {
+    var bk = bookRowByRid_(m.rid), paid = m.state === '이체파일생성', amt = paid ? m.amount : 0;
+    var p = alimSettlePlan_(m.rid, m.lr, amt, /고객 희망/.test(m.state) ? 'wish' : '');
+    var row = { '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(m.rid), '이름': bk ? bk.get('이름') : '', '처리': paid ? '이체' : m.state,
+      '금액': paid ? amt : 0, '알림톡': '', '받는번호': '', '문구': '', '버튼': '' };
+    if (p.skip) row['알림톡'] = p.skip === 'already' ? '이미 보냄 — 다시 안 감' : '예약 없음';
+    else {
+      var id = conf.tpl(p.kind), to = String(p.phone || '').replace(/[^0-9]/g, '');
+      if (!(id in tc)) tc[id] = solapiTemplate_(id);
+      var t = tc[id];
+      row['알림톡'] = ALIM_KINDS[p.kind].label + (/^01\d{8,9}$/.test(to) ? '' : ' (연락처 없음 — 안 감)') + (conf.on ? '' : ' (알림톡 꺼짐 — 안 감)');
+      row['받는번호'] = to ? '****' + to.slice(-4) : '';
+      row['문구'] = t ? fillVars_(t.content, p.vars) : '(템플릿 문구를 못 불러왔어요)';
+      row['버튼'] = t ? t.buttons.map(function (b) { return '[' + b.name + '] ' + fillVars_(b.link, p.vars); }).join('\n') : '';
+    }
+    rows.push(row);
+  });
+  (r.skipped || []).forEach(function (s) {
+    var bk = bookRowByRid_(s['예약번호']);
+    rows.push({ '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(s['예약번호']), '이름': bk ? bk.get('이름') : '', '처리': '빠짐 — ' + s['이유'], '금액': '', '알림톡': '안 감', '받는번호': '', '문구': '', '버튼': '' });
+  });
+  return { ok: true, count: r.count, total: r.total, free: r.free, skipped: (r.skipped || []).length, rows: rows };
+}
+function menuSettlePreview_() {
+  var ui = SpreadsheetApp.getUi(), r = writeSettlePreview_();
+  if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
+  ui.alert('정산 미리보기 (아직 아무것도 안 보냈어요)\n\n이체 ' + r.count + '건, 합계 ' + Number(r.total).toLocaleString('ko-KR') + '원\n무상수거 ' + r.free + '건' + (r.skipped ? '\n빠짐 ' + r.skipped + '건 (주황색 줄)' : '') +
+    '\n\n「정산미리보기」 탭에서 고객별 알림톡 문구를 확인하세요. 버튼 링크를 눌러 고객이 보게 될 사진 페이지도 볼 수 있어요.\n괜찮으면 「신한 다건이체 파일 만들기」를 누르면 그때 파일이 생기고 알림톡이 나가요.');
+}
+/** '정산미리보기' 탭에 쓰기 (메뉴·편집기 공용) */
+function writeSettlePreview_() {
+  var r = settlePreview_();
+  if (r.error) return r;
+  var sh = sheet_('정산미리보기', PREVIEW_HEADERS);
+  sh.clear();
+  sh.getRange(1, 1, 1, PREVIEW_HEADERS.length).setValues([PREVIEW_HEADERS]).setFontWeight('bold').setBackground('#eef7ea');
+  if (r.rows.length) {
+    sh.getRange(2, 1, r.rows.length, PREVIEW_HEADERS.length).setValues(r.rows.map(function (x) { return PREVIEW_HEADERS.map(function (h) { return x[h] == null ? '' : x[h]; }); }))
+      .setVerticalAlignment('top').setWrap(true);
+    r.rows.forEach(function (x, i) { if (/^빠짐/.test(x['처리'])) sh.getRange(i + 2, 1, 1, PREVIEW_HEADERS.length).setBackground('#fff4e5'); });
+  }
+  sh.setFrozenRows(1); sh.setColumnWidth(8, 420); sh.setColumnWidth(9, 260);
+  try { sh.activate(); } catch (e) {}
+  return r;
+}
+
 /** 스프레드시트 메뉴: 직원이 버튼으로 실행 */
 function onOpen() {
   try {
@@ -177,6 +232,7 @@ function onOpen() {
       .addItem('기사님 코드 보기·바꾸기', 'menuDriverKey_')
       .addItem('장부 번호 다시 매기기 (오늘 이후)', 'menuRenumber_')
       .addSeparator()
+      .addItem('정산 미리보기 (이체·알림톡 문구, 보내지 않음)', 'menuSettlePreview_')
       .addItem('신한 다건이체 파일 만들기', 'menuMakeTransfer_')
       .addItem('이체 파일 입금완료 처리', 'menuMarkPaid_')
       .addItem('장부 금액 수식 채우기 (신청페이지 줄)', 'menuFillCalc_')

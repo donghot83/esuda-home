@@ -129,7 +129,8 @@ function createEnv(opts = {}) {
         drive.folders[id] = f; return f; }
     },
     MailApp: { sendEmail: m => { mails.push(m); } },
-    UrlFetchApp: { fetch: (url, o) => { fetches.push({ url, o, body: JSON.parse(o.payload) }); const r = opts.fetchReply || { code: 200, body: { failedMessageList: [] } };
+    UrlFetchApp: { fetch: (url, o) => { if (/\/kakao\/v2\/templates\//.test(url)) { const t = (opts.templates || {})[decodeURIComponent(url.split('/').pop())]; return { getResponseCode: () => (t ? 200 : 404), getContentText: () => JSON.stringify(t || {}) }; }
+      fetches.push({ url, o, body: JSON.parse(o.payload) }); const r = opts.fetchReply || { code: 200, body: { failedMessageList: [] } };
       return { getResponseCode: () => r.code, getContentText: () => JSON.stringify(r.body) }; } },
     ScriptApp: { getProjectTriggers: () => (opts.noTrigger ? [] : [{ getHandlerFunction: () => 'syncLedgerPending' }]) },
     Logger: { log() {} },

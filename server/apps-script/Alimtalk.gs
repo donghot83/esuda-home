@@ -130,15 +130,24 @@ function alimPicked_(rid) {
  *  2026-11-17: 유상 매입 → TPL_SETTLE([계량 사진 보기]) / 15kg 미만 무상 → TPL_FREE_UNDER([계근 사진 보기]) / 무상 희망 → TPL_FREE_WISH(사진 없음)
  *  새 템플릿이 아직 없거나 계량 사진이 없으면 예전 템플릿으로 */
 function alimSettled_(rid, lr, amount, why) {
+  var p = alimSettlePlan_(rid, lr, amount, why);
+  if (p.skip) return p.skip === 'already' ? { ok: true, skipped: 'already' } : { ok: false, skipped: p.skip };
+  return sendAlimtalk_(p.kind, rid, p.phone, p.vars);
+}
+
+/** 정산 알림톡을 '무엇으로·누구에게·어떤 값으로' 보낼지 (보내지 않음) → {kind, phone, vars} | {skip}
+ *  2026-11-18: 미리보기(정산 미리보기 메뉴)와 실제 발송이 같은 판단을 쓰도록 나눔 */
+function alimSettlePlan_(rid, lr, amount, why) {
   var r = bookRowByRid_(rid);
-  if (!r) return { ok: false, skipped: 'no_booking' };
+  if (!r) return { skip: 'no_booking' };
   var w = Math.round(((+lr.weight || 0) - (+lr.excl || 0) - (+lr.loss || 0)) * 100) / 100;   // 정산 중량 = 무게 - 무상제외 - 로스
-  var c = alimConf_(), hasPhoto = typeof weighPhotos_ === 'function' && weighPhotos_(null, rid, '계량').length > 0;
+  var c = alimConf_(), hasPhoto = typeof weighPhotos_ === 'function' && weighPhotos_(null, rid, '계량').length > 0, ph = r.get('연락처');
+  var plan = function (kind, vars) { return { kind: kind, phone: ph, vars: vars }; };
   if (amount > 0) {
-    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid) || alimSent_('settle', rid)) return { ok: true, skipped: 'already' };
+    if (alimSent_('paid', rid) || alimSent_('paidPhoto', rid) || alimSent_('settle', rid)) return { skip: 'already' };
     if (c.tpl('settle') && hasPhoto) {
       var lu = lossUnitPrice_(), loss = +lr.loss || 0;
-      return sendAlimtalk_('settle', rid, r.get('연락처'), { '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
+      return plan('settle', { '#{정산중량}': String(w), '#{매입단가}': String(transferUnitPrice_()),
         '#{로스}': String(loss), '#{로스금액}': Number(loss * lu).toLocaleString('ko-KR'), '#{매입금액}': Number(amount).toLocaleString('ko-KR'),
         '#{사진코드}': pickPhotoCode_(rid, true) });
     }
@@ -146,17 +155,30 @@ function alimSettled_(rid, lr, amount, why) {
       '#{무게}': String(w), '#{단가}': String(transferUnitPrice_()), '#{금액}': Number(amount).toLocaleString('ko-KR'),
       '#{은행}': r.get('은행'), '#{계좌끝4자리}': r.get('계좌번호').replace(/[^0-9]/g, '').slice(-4) };
     // 2026-11-17: 계량 사진이 있고 사진 템플릿이 있으면 [계량 사진 보기] 버튼·로스 차감 줄 있는 것으로
-    if (alimConf_().tpl('paidPhoto') && typeof weighPhotos_ === 'function' && weighPhotos_(null, rid).length) {
+    if (c.tpl('paidPhoto') && typeof weighPhotos_ === 'function' && weighPhotos_(null, rid).length) {
       vars['#{로스}'] = String(+lr.loss || 0); vars['#{로스단가}'] = String(lossUnitPrice_()); vars['#{사진코드}'] = pickPhotoCode_(rid, true);
-      return sendAlimtalk_('paidPhoto', rid, r.get('연락처'), vars);
+      return plan('paidPhoto', vars);
     }
-    return sendAlimtalk_('paid', rid, r.get('연락처'), vars);
+    return plan('paid', vars);
   }
-  if (alimSent_('free', rid) || alimSent_('freeUnder', rid) || alimSent_('freeWish', rid)) return { ok: true, skipped: 'already' };
-  if (why === 'wish' && c.tpl('freeWish')) return sendAlimtalk_('freeWish', rid, r.get('연락처'), {});   // 문구에 변수 없음
-  if (why !== 'wish' && c.tpl('freeUnder') && hasPhoto) return sendAlimtalk_('freeUnder', rid, r.get('연락처'), { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
-  return sendAlimtalk_('free', rid, r.get('연락처'), { '#{이름}': r.get('이름'), '#{무게}': String(w) });
+  if (alimSent_('free', rid) || alimSent_('freeUnder', rid) || alimSent_('freeWish', rid)) return { skip: 'already' };
+  if (why === 'wish' && c.tpl('freeWish')) return plan('freeWish', {});   // 문구에 변수 없음
+  if (why !== 'wish' && c.tpl('freeUnder') && hasPhoto) return plan('freeUnder', { '#{수거중량}': String(w), '#{사진코드}': pickPhotoCode_(rid, true) });
+  return plan('free', { '#{이름}': r.get('이름'), '#{무게}': String(w) });
 }
+
+/** 솔라피에 등록된 템플릿 문구·버튼 (미리보기용) → {content, buttons:[{name, link}], status} | null */
+function solapiTemplate_(id) {
+  var c = alimConf_();
+  if (!id || !c.key || !c.secret) return null;
+  try {
+    var res = UrlFetchApp.fetch('https://api.solapi.com/kakao/v2/templates/' + encodeURIComponent(id), { muteHttpExceptions: true, headers: { Authorization: solapiAuth_(c.key, c.secret) } });
+    if (res.getResponseCode() >= 300) return null;
+    var j = JSON.parse(res.getContentText());
+    return { content: String(j.content || ''), status: String(j.status || ''), buttons: (j.buttons || []).map(function (b) { return { name: b.buttonName, link: b.linkMo || '' }; }) };
+  } catch (e) { return null; }
+}
+function fillVars_(s, vars) { return String(s || '').replace(/#\{[^}]+\}/g, function (k) { return vars[k] != null ? vars[k] : k; }); }
 
 /** 알림톡 준비 상태 (점검 메일·메뉴용) — 비밀값은 '있음/없음'만 */
 function alimStatus_() {
