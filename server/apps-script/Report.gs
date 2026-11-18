@@ -29,7 +29,7 @@ function runChecks_() {
   var bad = { parity: [], weekend: [], closed: [], lost: [], cancelLeft: [] }, todayNew = 0, photos = 0, upcoming = 0;
   for (var i = 1; i < b.data.length; i++) {
     var r = b.data[i], rid = String(r[cId]), d = fmtDate_(r[cDate]), st = String(r[cSt]);
-    if (String(r[cAt] || '').slice(0, 10) === today) { todayNew++; if (String(r[cPh] || '')) photos++; }
+    if (ymd10_(r[cAt]) === today) { todayNew++; if (String(r[cPh] || '')) photos++; }
     if (!d || d < today) continue;
     if (st === '취소') {
       try { var cf = ledgerFindEntry_({ rid: rid, date: d }); if (cf && !cf.cancelled) bad.cancelLeft.push(rid); } catch (e) {}
@@ -156,6 +156,9 @@ function refreshDashboard() {
 }
 
 /** 매일 점검 메일 (트리거: 매일 18시) */
+/** 시각 칸 → 'YYYY-MM-DD' (2026-11-18: 시트가 '2026-11-18 16:40:01' 글자를 날짜로 바꿔 저장해서 String().slice 로는 오늘 집계가 0 이 됨) */
+function ymd10_(v) { return v instanceof Date || (v && typeof v.getTime === 'function') ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd') : String(v || '').slice(0, 10); }
+
 function dailyReport() {
   try { tidyPrePhotos_(); } catch (e) { logError_('사진 정리', e); }
   var chk = refreshDashboard();
@@ -177,7 +180,7 @@ function dailyReport() {
     (function () { var a = alimStatus_(); return '■ 알림톡: ' + (a.on ? '켜짐' : '꺼짐') + (a.missing.length ? ' (준비 남음: ' + a.missing.join(', ') + ')' : ''); })(),
     (function () {
       var sh = ss_().getSheetByName(SHEET_CANCEL_LOG); if (!sh) return '■ 오늘 처리한 취소: 없음';
-      var t = sh.getDataRange().getValues().slice(1).filter(function (r) { return String(r[0]).slice(0, 10) === chk.today; })
+      var t = sh.getDataRange().getValues().slice(1).filter(function (r) { return ymd10_(r[0]) === chk.today; })
         .map(function (r) { return dayLabel_(fmtDate_(r[1])) + ' ' + r[2] + '번 ' + r[3]; });
       return '■ 오늘 처리한 취소: ' + (t.length ? t.length + '건 — ' + t.join(', ') : '없음');
     })(),
@@ -280,7 +283,7 @@ function cancelsFor_(date) {
   var sh = ss_().getSheetByName(SHEET_CANCEL_LOG);
   if (!sh) return [];
   return sh.getDataRange().getValues().slice(1).filter(function (r) { return fmtDate_(r[1]) === date; })
-    .map(function (r) { return { no: r[2], name: String(r[3]), area: String(r[4]), at: String(r[0]).slice(5) }; });
+    .map(function (r) { return { no: r[2], name: String(r[3]), area: String(r[4]), at: (r[0] instanceof Date || (r[0] && typeof r[0].getTime === 'function')) ? Utilities.formatDate(r[0], 'Asia/Seoul', 'MM-dd HH:mm') : String(r[0]).slice(5) }; });
 }
 
 function menuCancel_() {
@@ -388,7 +391,7 @@ function visitSummary_(date) {
   if (!sh) return out;
   var seen = {};
   sh.getDataRange().getValues().slice(1).forEach(function (r) {
-    if (String(r[0]).slice(0, 10) !== date) return;
+    if (ymd10_(r[0]) !== date) return;
     var sid = String(r[1]), st = String(r[2]), info = String(r[3]);
     seen[sid + '|' + st] = 1;
     if (st === 'open') { out.visits++; out.dev[r[4]] = (out.dev[r[4]] || 0) + 1; }
