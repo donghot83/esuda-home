@@ -52,7 +52,7 @@ function ledgerRowFor_(lss, dateStr, rid) {
   var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
   for (var i = 1; i < v.length; i++) {
     if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) {
-      return { weight: v[i][LC.weight - 1], excl: LC.excl ? v[i][LC.excl - 1] : '', loss: v[i][LC.loss - 1], amount: v[i][LC.amount - 1], row: i + 1 };
+      return { weight: v[i][LC.weight - 1], excl: LC.excl ? v[i][LC.excl - 1] : '', loss: v[i][LC.loss - 1], amount: v[i][LC.amount - 1], row: i + 1, memo: String(v[i][LC.memo - 1] || '') };
     }
   }
   return null;
@@ -94,6 +94,7 @@ function makeTransferFile(opts) {
       if (String(r[col('확정상태')]) !== '확정') continue;
       if (String(r[col('이체파일')] || '') || String(r[col('지급상태')] || '')) continue; // 이미 처리
       var rid = String(r[col('예약번호')]), date = fmtDate_(r[col('수거일')]);
+      if (opts.dates && opts.dates.length && opts.dates.indexOf(date) < 0) continue;   // 2026-11-19: 하루치씩 정산
       var lr = ledgerRowFor_(lss, date, rid);
       var notYet = date >= Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'); // 오늘 밤 수거 포함 아직 전 → '확인 필요'로 띄우지 않음
       if (!lr) { if (!notYet) skipped.push({ 예약번호: rid, 이유: '장부에 줄 없음' }); continue; }
@@ -142,6 +143,7 @@ function makeTransferFile(opts) {
     }
     marks.forEach(function (m) {
       sh.getRange(m.row, col('지급상태') + 1).setValue(m.state);
+      if (noAlim_(m.lr)) { try { alimLog_('settle', m.rid, '', '안 보냄 (장부 메모 알림X)'); } catch (e) {} return; }   // 2026-11-19 특이 고객: 이체는 하고 알림톡만 안 보냄
       if (m.state === '이체파일생성') sh.getRange(m.row, col('이체파일') + 1).setValue(fileName);
       if (/^무상수거/.test(m.state)) { try { alimSettled_(m.rid, m.lr, 0, /고객 희망/.test(m.state) ? 'wish' : ''); } catch (e) { logError_('알림톡(무상수거)', e); } }
       // 2026-11-16 대표 결정: 입금 '예정' 안내를 이체 파일 만들 때 먼저 보내고, 송금은 그 뒤에
@@ -174,8 +176,8 @@ function markTransferPaid(fileName) {
  * 파일·표시·발송 없이 '정산미리보기' 탭에 그대로 보여 줌. 확인 후 「신한 다건이체 파일 만들기」를 누르면 그때 실제로 나감.
  */
 var PREVIEW_HEADERS = ['수거일', '예약번호', '이름', '처리', '금액', '알림톡', '받는번호', '문구', '버튼'];
-function settlePreview_() {
-  var r = makeTransferFile({ dryRun: true });
+function settlePreview_(dates) {
+  var r = makeTransferFile({ dryRun: true, dates: dates });
   if (r.error) return r;
   var conf = alimConf_(), tc = {}, rows = [];
   (r.marks || []).forEach(function (m) {
@@ -183,6 +185,7 @@ function settlePreview_() {
     var p = alimSettlePlan_(m.rid, m.lr, amt, /고객 희망/.test(m.state) ? 'wish' : '', kk);
     var row = { '수거일': bk ? bk.date('수거일') : '', '예약번호': shortRid_(m.rid), '이름': bk ? bk.get('이름') : '', '처리': kk ? '카톡 — 이체는 따로 (파일에 없음)' : paid ? '이체' : m.state,
       '금액': paid ? amt : 0, '알림톡': '', '받는번호': '', '문구': '', '버튼': '' };
+    if (noAlim_(m.lr)) { row['알림톡'] = '안 보냄 (장부 메모에 알림X)'; rows.push(row); return; }
     if (p.skip) row['알림톡'] = p.skip === 'already' ? '이미 보냄 — 다시 안 감' : p.skip === 'wish_tpl' ? '안 감 — 무상 희망 알림톡 템플릿 승인 전' : '예약 없음';
     else {
       var id = conf.tpl(p.kind), to = String(p.phone || '').replace(/[^0-9]/g, '');
@@ -201,15 +204,29 @@ function settlePreview_() {
   });
   return { ok: true, count: r.count, total: r.total, free: r.free, kakao: r.kakao, kakaoTotal: r.kakaoTotal, skipped: (r.skipped || []).length, rows: rows };
 }
+/** 2026-11-19: 정산할 수거일 묻기 — 비우면 전체. 반환 null(취소) | [] (전체) | ['2026-11-17', …] */
+function askSettleDates_(ui, title) {
+  var p = ui.prompt(title, '정산할 수거일을 넣어 주세요 (예: 11/17, 여러 날은 쉼표). 비우면 아직 정산 안 한 전체.', ui.ButtonSet.OK_CANCEL);
+  if (p.getSelectedButton() !== ui.Button.OK) return null;
+  var R = rules_(), y = R.todayKST(new Date()).slice(0, 4), t = p.getResponseText().trim();
+  if (!t) return [];
+  var out = t.split(/[,\s]+/).filter(Boolean).map(function (s) { var m = /^(?:(\d{4})[-./])?(\d{1,2})[-./](\d{1,2})$/.exec(s); return m ? (m[1] || y) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : ''; });
+  if (out.some(function (d) { return !R.parseYmd(d); })) { ui.alert('날짜를 "11/17"처럼 넣어 주세요.'); return null; }
+  return out;
+}
+function noAlim_(lr) { return !!(lr && /알림\s*톡?\s*[xX×]/.test(String(lr.memo || ''))); }
+
 function menuSettlePreview_() {
-  var ui = SpreadsheetApp.getUi(), r = writeSettlePreview_();
+  var ui = SpreadsheetApp.getUi(), ds = askSettleDates_(ui, '정산 미리보기');
+  if (ds === null) return;
+  var r = writeSettlePreview_(ds);
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
   ui.alert('정산 미리보기 (아직 아무것도 안 보냈어요)\n\n이체 ' + r.count + '건, 합계 ' + Number(r.total).toLocaleString('ko-KR') + '원\n무상수거 ' + r.free + '건' + (r.kakao ? '\n카톡 예약 ' + r.kakao + '건 ' + Number(r.kakaoTotal).toLocaleString('ko-KR') + '원 — 알림톡만, 이체는 따로' : '') + (r.skipped ? '\n빠짐 ' + r.skipped + '건 (주황색 줄)' : '') +
     '\n\n「정산미리보기」 탭에서 고객별 알림톡 문구를 확인하세요. 버튼 링크를 눌러 고객이 보게 될 사진 페이지도 볼 수 있어요.\n괜찮으면 「신한 다건이체 파일 만들기」를 누르면 그때 파일이 생기고 알림톡이 나가요.');
 }
 /** '정산미리보기' 탭에 쓰기 (메뉴·편집기 공용) */
-function writeSettlePreview_() {
-  var r = settlePreview_();
+function writeSettlePreview_(dates) {
+  var r = settlePreview_(dates);
   if (r.error) return r;
   var sh = sheet_('정산미리보기', PREVIEW_HEADERS);
   sh.clear();
@@ -248,7 +265,9 @@ function onOpen() {
   } catch (e) {}
 }
 function menuMakeTransfer_() {
-  var ui = SpreadsheetApp.getUi(), r = makeTransferFile();
+  var ui = SpreadsheetApp.getUi(), ds = askSettleDates_(ui, '신한 다건이체 파일 만들기 (알림톡이 나가요)');
+  if (ds === null) return;
+  var r = makeTransferFile({ dates: ds });
   if (r.error) { ui.alert('실행하지 못했어요: ' + r.error); return; }
   var msg = '이체 대상 ' + r.count + '건, 합계 ' + r.total.toLocaleString() + '원\n무상수거 ' + r.free + '건';
   if (r.kakao) msg += '\n\n카톡 예약 ' + r.kakao + '건 ' + Number(r.kakaoTotal).toLocaleString('ko-KR') + '원 — 매입 정산 알림톡만 보냈어요. 이체는 따로 해 주세요 (파일에 없음).';

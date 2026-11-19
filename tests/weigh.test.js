@@ -276,3 +276,21 @@ test('2026-11-18 카톡·직원 줄도 계량 화면으로 무게 넣으면 최�
   q(e, { action: 'weighSave', id: k.id, bags: 2, weight: 30, withLoss: true, loss: 1, force: true });
   assert.ok(!(row.f || {})[8]); assert.strictEqual(row[8], 7000);
 });
+
+test('2026-11-19 하루치씩 정산(dates) + 메모에 알림X면 이체는 하고 알림톡만 안 보냄', () => {
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-16', name: '월요고객', phone: '010-1111-0101' }));
+  const b = e0.post(sub({ date: '2026-11-18', name: '수요고객', phone: '010-1111-0102' }));
+  const e = createEnv({ now: '2026-11-19T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: READY });
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  const L = e.ledger['11월 매입금액'].rows; L.push(...e0.ledger['11월 매입금액'].rows.slice(1));
+  [a, b].forEach(x => { const r = rowOf(L, x.reservationId); r[5] = 20; r[8] = 5000; });
+  rowOf(L, b.reservationId)[10] += ' / 알림X';
+  assert.strictEqual(e.ctx.makeTransferFile({ dryRun: true, dates: ['2026-11-18'] }).count, 1);
+  const pv = e.ctx.settlePreview_(['2026-11-18']).rows;
+  assert.strictEqual(pv.length, 1); assert.match(pv[0]['알림톡'], /알림X/);
+  const r = e.ctx.makeTransferFile({ dates: ['2026-11-18'] });
+  assert.strictEqual(r.count, 1);
+  assert.ok(!e.fetches.some(f => f.body && f.body.messages && f.body.messages[0].to === '01011110102'));
+  assert.strictEqual(e.ctx.makeTransferFile({ dryRun: true }).count, 1);   // 월요일은 그대로 남음
+});
