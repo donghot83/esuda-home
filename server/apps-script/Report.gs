@@ -252,7 +252,9 @@ function cancelReservation(input) {
       if (f.cancelled) msgs.push('장부: 이미 취소 표시돼 있어요 (' + f.no + '번 ' + f.name + ')');
       else {
         f.sheet.getRange(f.row, f.memoCol).setValue('[취소 ' + stamp + '] ' + f.memo);
-        f.sheet.getRange(f.row, 1, 1, f.memoCol).setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setFontLine('line-through');
+        // 2026-11-20: 칸 서식으로 칠하면 줄을 옮기거나 정렬할 때 빨간 줄이 엉뚱한 고객에 남음(구지은·임보람·서승아) →
+        // 메모가 '[취소'로 시작하는 줄을 자동으로 칠하는 조건부 서식으로 (줄을 어디로 옮겨도 따라감)
+        try { ensureCancelRule_(f.sheet, f.memoCol); } catch (e) { f.sheet.getRange(f.row, 1, 1, f.memoCol).setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setFontLine('line-through'); }
         bumpLedgerCount_(q.date, -1);
         msgs.push('장부: ' + f.no + '번 ' + f.name + ' 줄에 빨간 취소선 표시 (번호는 그대로)' + (String(f.weight == null ? '' : f.weight).trim() ? ' — 무게가 이미 적혀 있으니 확인해 주세요' : ''));
       }
@@ -278,6 +280,17 @@ function cancelReservation(input) {
     if (q.date) driverCacheClear_(q.date);   // 2026-11-17: 기사님 화면에 바로 취소로 보이게
     return { ok: true, msg: (f ? q.date.slice(5).replace('-', '/') + ' ' + f.no + '번 ' + f.name : rid) + ' 취소 처리\n' + msgs.join('\n') };
   } finally { lock.releaseLock(); }
+}
+
+/** 장부 시트에 '메모가 [취소 로 시작하면 빨간 취소선' 조건부 서식 (한 번만 추가) */
+function ensureCancelRule_(sh, memoCol) {
+  var L = colLetter_(memoCol), rules = sh.getConditionalFormatRules();
+  var has = rules.some(function (r) { var c = r.getBooleanCondition && r.getBooleanCondition(); return c && String((c.getCriteriaValues() || [])[0] || '').indexOf('[취소') >= 0; });
+  if (has) return false;
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=LEFT($' + L + '2,3)="[취소"')
+    .setBackground(CANCEL_BG).setFontColor(CANCEL_FG).setStrikethrough(true).setRanges([sh.getRange('A2:' + L + sh.getMaxRows())]).build());
+  sh.setConditionalFormatRules(rules);
+  return true;
 }
 
 /** 그날 취소 목록 [{no, name, area, at}] — 기사님 화면·현황판·메일용 */
