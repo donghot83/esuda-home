@@ -407,6 +407,7 @@ function visitSummary_(date) {
   var seen = {};
   sh.getDataRange().getValues().slice(1).forEach(function (r) {
     if (ymd10_(r[0]) !== date) return;
+    if (/직원/.test(String(r[4] || ''))) return;   // 2026-11-21: 대표·직원 접속(?staff=1)은 통계에서 뺌
     var sid = String(r[1]), st = String(r[2]), info = String(r[3]);
     seen[sid + '|' + st] = 1;
     if (st === 'open') { out.visits++; out.dev[r[4]] = (out.dev[r[4]] || 0) + 1; }
