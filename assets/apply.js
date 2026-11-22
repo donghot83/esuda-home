@@ -26,7 +26,9 @@
   }
 
   // ---------------- 방문 단계 기록 (2026-11-16: 어디서 그만두는지 보려고 — 이름·연락처 등 개인정보는 안 보냄)
-  var TRK = { sid: Math.random().toString(36).slice(2, 10), sent: {}, last: 'open', done: false };
+  // 2026-11-22: 같은 날 나갔다 다시 들어오면(단가 확인 등) 같은 사람으로 — 방문번호를 이 기기에 하루 동안 기억
+  var TRK = { sid: (function () { var d = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), v = ''; try { v = localStorage.getItem('esuda_sid') || ''; } catch (e) {}
+    if (v.slice(0, 10) === d) return v.slice(11); var id = Math.random().toString(36).slice(2, 10); try { localStorage.setItem('esuda_sid', d + ' ' + id); } catch (e) {} return id; })(), sent: {}, last: 'open', done: false };
   var DEV = /KAKAOTALK/i.test(navigator.userAgent) ? '카톡' : (/iPhone|iPad|Android/i.test(navigator.userAgent) ? '모바일' : 'PC');
   // 2026-11-21: 대표·직원 휴대폰은 esuda.kr/apply/?staff=1 로 한 번 열면 기억 → 방문 기록에 '직원'으로 표시해 이탈 통계에서 뺌 (?staff=0 이면 해제)
   try { var sq = /[?&]staff=([01])/.exec(location.search); if (sq) { if (sq[1] === '1') localStorage.setItem('esuda_staff', '1'); else localStorage.removeItem('esuda_staff'); } if (localStorage.getItem('esuda_staff') === '1') DEV += '·직원'; } catch (e) {}
