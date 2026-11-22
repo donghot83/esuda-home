@@ -119,7 +119,14 @@ function ledgerOpen_(dateStr) {
 }
 
 function ledgerMonthSheet_(ss, dateStr) {
-  var m = +dateStr.slice(5, 7);
+  var m = +dateStr.slice(5, 7), y = dateStr.slice(0, 4);
+  // 2026-11-22: 2027년 예약도 26년 장부 파일에 '27년 1월 매입금액' 시트로 (그냥 '1월 매입금액'은 2026년 1월 기록이라 섞이면 안 됨)
+  var P = PropertiesService.getScriptProperties(), main = P.getProperty('LEDGER_YEAR') || '2026';
+  if (y !== main) {
+    var yn = y.slice(2) + '년 ' + m + '월 매입금액', ys = ss.getSheetByName(yn);
+    if (ys) return ys;
+    if (P.getProperty('LEDGER_ID_' + y) === P.getProperty('LEDGER_ID')) return null;   // 26년 파일을 같이 쓰면 '27년 1월 매입금액'만 (그해 전용 파일이면 아래 기본 이름)
+  }
   var names = [m + '월 매입금액', m + '월매입금액', m + '월 매입입금', m + '월매입입금'];
   for (var i = 0; i < names.length; i++) { var sh = ss.getSheetByName(names[i]); if (sh) return sh; }
   return null;
