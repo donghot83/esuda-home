@@ -8,7 +8,7 @@
 <meta name="description" content="이수다 헌옷 방문수거 신청">
 <link rel="icon" href="../assets/favicon-32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="../assets/apply.css?v=10">
+<link rel="stylesheet" href="../assets/apply.css?v=11">
 </head>
 <body>
 <header class="ap-head">
@@ -19,14 +19,12 @@
 <main class="ap-main" id="formView">
   <div class="ap-hero">
     <h1>문 앞에 두시면<br><b>저희가 가져갈게요</b></h1>
-    <p>주소를 고르면 그 동네의 수거 가능한 날짜가 나와요. 15kg 이상은 무게를 재서 계좌로 입금해 드려요.</p>
     <!-- 2026-11-22 대표 요청: 단가를 확인하러 나갔다 오는 고객이 있어 맨 위에 매입 기준 -->
     <ul class="ap-price">
-      <li><b>1kg당 250원</b> 매입</li>
-      <li><b>15kg 이상</b>이면 무게를 재서 계좌로 입금</li>
-      <li>15kg 미만은 <b>무상수거</b></li>
+      <li><span>매입 단가</span><b>1kg 250원</b></li>
+      <li><span>매입 기준</span><b>15kg 이상</b></li>
+      <li><span>입금</span><b>3일 안</b></li>
     </ul>
-    <p class="ap-price-note">센터에서 무게를 잰 뒤 영업일 기준 3일 안에 입금해 드려요. 오염이 심한 옷·속옷·이불·커튼은 매입에서 빠져요. 단가는 시세에 따라 바뀔 수 있어요.</p>
     <p class="ap-test" id="testBadge" hidden>테스트 모드 — 실제 예약이 아니에요</p>
   </div>
 
@@ -61,7 +59,6 @@
     <section class="ap-card">
       <h2><span class="n">3</span>수거할 옷은 얼마나 되나요? <em>필수</em></h2>
       <div class="ap-chips" data-group="amount"></div>
-      <p class="ap-small">15kg 미만은 매입 없이 무상수거로 진행돼요.</p>
       <label class="ap-field" id="amountDetailWrap" hidden><span>수거 양·물품</span><input id="amountDetail" maxlength="100" placeholder="예: 큰 이불가방 2개, 신발 10켤레"></label>
       <p class="ap-err" data-err="amount"></p><p class="ap-err" data-err="amountDetail"></p>
 
@@ -77,6 +74,7 @@
       <p class="ap-small" id="photoLaterHint" hidden>신청이 끝나면 예약번호와 함께 카카오채널로 사진을 보내 주세요.</p>
 
       <h3>물건은 어디에 두실 건가요?</h3>
+      <p class="ap-warn">⚠️ 길가나 건물 밖에 두시면 분실될 수 있어요.</p>
       <div class="ap-chips" data-group="place"></div>
       <label class="ap-field" id="placeDetailWrap" hidden><span>놓을 곳</span><input id="placeDetail" maxlength="100" placeholder="예: 1층 경비실 옆"></label>
       <p class="ap-err" data-err="place"></p><p class="ap-err" data-err="placeDetail"></p>
@@ -177,6 +175,6 @@
 <script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <script src="../assets/apply-rules.js?v=10"></script>
 <script src="../assets/apply-config.js?v=7"></script>
-<script src="../assets/apply.js?v=16"></script>
+<script src="../assets/apply.js?v=17"></script>
 </body>
 </html>

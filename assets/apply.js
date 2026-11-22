@@ -57,7 +57,7 @@
     var box = document.querySelector('[data-group="' + group + '"]');
     items.forEach(function (t) {
       var b = document.createElement('button');
-      b.type = 'button'; b.className = 'ap-chip'; b.textContent = t;
+      b.type = 'button'; b.className = 'ap-chip'; b.textContent = String(t).replace(/\s*\(무상수거\)/, '');   // 2026-11-22: 유상·무상 헷갈리지 않게 화면에선 뺌
       b.addEventListener('click', function () {
         box.querySelectorAll('.ap-chip').forEach(function (x) { x.classList.remove('on'); });
         b.classList.add('on'); state[group] = t; clearErr(group); if (onPick) onPick(t);
