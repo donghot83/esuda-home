@@ -106,3 +106,7 @@ body{font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFo
 .ap-day.today:not(.ok){text-decoration:underline}
 .ap-cal-pick{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--soft);color:var(--green-d);font-size:15px;text-align:center}
 .ap-cal-pick.none{background:#f8fafc;color:var(--sub);font-size:14px}
+/* 2026-11-22 오류 줄이기: 틀린 칸 빨간 테두리, 모두 동의, 안내 문구 */
+.ap-bad{outline:2px solid #d92d20;outline-offset:6px;border-radius:12px}
+.ap-check-all{background:#f1f8ee;border-radius:10px;padding:10px 12px;margin:10px 0 6px}
+.ap-req{font-style:normal;font-size:12px;color:#d92d20;margin-left:4px}

@@ -254,6 +254,19 @@
   function setErr(f, msg) { var el = document.querySelector('[data-err="' + f + '"]'); if (el) el.textContent = msg || ''; }
   function clearErr(f) { setErr(f, ''); }
   function clearAll() { document.querySelectorAll('[data-err]').forEach(function (e) { e.textContent = ''; }); $('formError').textContent = ''; }
+  var ERR_NAME = { address: '주소', addressDetail: '상세주소', date: '수거 날짜', amount: '수거 양', amountDetail: '수거 양', place: '물건 놓을 곳', placeDetail: '물건 놓을 곳',
+    entrance: '공동현관 출입 방법', entranceCode: '공동현관 비밀번호', name: '이름', phone: '휴대폰 번호', bank: '은행', account: '계좌번호', holder: '예금주',
+    agreeNotice: '이용 안내 확인', agreePrivacy: '개인정보 동의', photo: '사진' };
+  // 고친 칸은 바로 빨간 표시 지움
+  document.addEventListener('input', function (e) { var s = e.target.closest && e.target.closest('.ap-bad'); if (s) s.classList.remove('ap-bad'); }, true);
+  document.addEventListener('click', function (e) { var s = e.target.closest && e.target.closest('.ap-bad'); if (s && e.target.closest('.ap-chips, .ap-check, button')) s.classList.remove('ap-bad'); }, true);
+  // 2026-11-22: '모두 동의' 한 번에 (개별 체크는 그대로 — 둘 다 체크돼야 신청)
+  (function () {
+    var all = $('agreeAll'), a = $('agreeNotice'), b = $('agreePrivacy');
+    if (!all) return;
+    all.addEventListener('change', function () { a.checked = b.checked = all.checked; if (all.checked) { clearErr('agreeNotice'); clearErr('agreePrivacy'); } });
+    [a, b].forEach(function (x) { x.addEventListener('change', function () { all.checked = a.checked && b.checked; }); });
+  })();
   function showErrors(errs) {
     var first = null;
     Object.keys(errs).forEach(function (k) {
@@ -261,8 +274,15 @@
       var el = document.querySelector('[data-err="' + k + '"]');
       if (el && !first) first = el;
     });
-    $('formError').textContent = '빨간 글씨로 표시된 곳을 확인해 주세요.';
-    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 2026-11-22: 무엇을 고쳐야 하는지 한 줄로 + 그 칸(섹션)을 빨간 테두리로, 화면은 첫 칸으로
+    var names = Object.keys(errs).map(function (k) { return ERR_NAME[k] || ''; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+    $('formError').textContent = names.length ? '확인할 곳 ' + names.length + '개: ' + names.slice(0, 4).join(', ') + (names.length > 4 ? ' 외 ' + (names.length - 4) + '곳' : '') + ' — 빨간 테두리를 확인해 주세요.' : '빨간 글씨로 표시된 곳을 확인해 주세요.';
+    document.querySelectorAll('.ap-bad').forEach(function (s) { s.classList.remove('ap-bad'); });
+    Object.keys(errs).forEach(function (k) { var el = document.querySelector('[data-err="' + k + '"]'), sec = el && (el.closest('section') || el.parentNode); if (sec) sec.classList.add('ap-bad'); });
+    var target = null;   // 화면에서 가장 위에 있는 틀린 칸으로
+    document.querySelectorAll('.ap-bad').forEach(function (x) { if (!target || x.getBoundingClientRect().top < target.getBoundingClientRect().top) target = x; });
+    target = target || (first && (first.closest('section') || first));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function payload() {
