@@ -7,10 +7,10 @@ const R = require('../assets/apply-rules.js');
 const NOW = '2026-11-14T01:00:00Z'; // 한국 11/14(토) 10:00
 const good = (over = {}) => Object.assign({
   action: 'submit', submissionId: 'sub-' + Math.random().toString(36).slice(2, 12),
-  name: '테스트고객', phone: '010-0000-0000',
+  name: '가상고객', phone: '010-0000-0000',
   address: { sido: '서울', sigungu: '마포구', bname: '성산동', roadAddress: '서울 마포구 가상로 1', zonecode: '00000' },
   addressDetail: '101호', date: '2026-11-18', amount: R.AMOUNTS[1], place: R.PLACES[0], entrance: R.ENTRANCE[1],
-  bank: '신한은행', account: '0000000000', holder: '테스트고객', agreeNotice: true, agreePrivacy: true
+  bank: '신한은행', account: '0000000000', holder: '가상고객', agreeNotice: true, agreePrivacy: true
 }, over);
 
 test('정상 신청 → 저장과 동시에 확정, 예약번호·수거일 반환, 장부반영=대기', () => {
@@ -60,7 +60,7 @@ test('공개 schedule 응답에는 마감 정보만 (고객 정보 없음)', () 
   env.post(good());
   const s = env.get({ action: 'schedule' });
   assert.strictEqual(s.ok, true); assert.strictEqual(s.today, '2026-11-14');
-  assert.ok(!JSON.stringify(s).includes('테스트고객'));
+  assert.ok(!JSON.stringify(s).includes('가상고객'));
 });
 
 test('저장 실패 → ok:false (확정 안내 없음)', () => {
@@ -105,7 +105,7 @@ test('하루 한도: 같은 날 확정 22건이 차면 23번째는 거부, 달�
   assert.strictEqual(env.sheet('예약').rows.length, 23);
   const s = env.get({ action: 'schedule' });
   assert.strictEqual(s.counts['2026-11-18'], 22);
-  assert.ok(!JSON.stringify(s).includes('테스트고객')); // 고객 정보는 나가지 않음
+  assert.ok(!JSON.stringify(s).includes('가상고객')); // 고객 정보는 나가지 않음
 });
 
 test('당일 예약: 서버도 한국 시간 오후 5시 이후 당일 신청을 거부', () => {

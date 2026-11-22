@@ -122,10 +122,10 @@ test('매일 점검 메일: 정상 항목과 확인 필요(12월 시트 없음·
   assert.match(m.subject, /^\[이수다 매일 점검\] 11\/15\(일\) ⚠️ 확인 필요/);
   assert.match(m.body, /홀짝 규칙: 남쪽=홀수일, 북쪽=짝수일 모두 맞음/);
   assert.match(m.body, /12월 매입금액" 시트가 아직 없어요/);
-  assert.ok(!/2027년 예약도 받기 시작/.test(m.body)); // 11/15 기준 30일 뒤(12/15)까지라 아직 아님
+  assert.match(m.body, /2027년 예약도 받기 시작/); // 2026-11-22: 달력 70일 → 11/15 기준으로도 1월까지
   const env2 = createEnv({ now: '2026-12-10T01:00:00Z', ledger: ledger(), notify: 'boss@example.com' });
   env2.ctx.dailyReport();
-  assert.match(env2.mails[env2.mails.length - 1].body, /2027년 예약도 받기 시작했어요\(달력 30일\)/);
+  assert.match(env2.mails[env2.mails.length - 1].body, /2027년 예약도 받기 시작했어요\(달력 70일\)/);
   assert.ok(!/01011112222|010-1111-2222|1234567890/.test(m.body));
   const dash = env.sheet('현황').rows;
   assert.ok(dash.some(r => r && r[0] === '2026-11-16' && r[3] >= 1), '현황판에 11/16 예약 수');

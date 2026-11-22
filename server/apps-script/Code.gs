@@ -76,9 +76,10 @@ function zoneCode_(x) {
 /** 신청페이지로 들어온 날짜별 확정 예약 수 {'YYYY-MM-DD': n} (onlyUnsynced=true 면 아직 장부에 안 들어간 것만) */
 function pageCountsByDate_(data, onlyUnsynced) {
   if (!data) data = sheet_(SHEET_BOOK, BOOK_HEADERS).getDataRange().getValues();
-  var hdr = data[0] || [], cDate = hdr.indexOf('수거일'), cSt = hdr.indexOf('확정상태'), cSync = hdr.indexOf('장부반영'), out = {};
+  var hdr = data[0] || [], cDate = hdr.indexOf('수거일'), cSt = hdr.indexOf('확정상태'), cSync = hdr.indexOf('장부반영'), cName = hdr.indexOf('이름'), out = {};
   for (var i = 1; i < data.length; i++) {
     if (cSt >= 0 && String(data[i][cSt]) !== '확정') continue;
+    if (cName >= 0 && isTestName_(data[i][cName])) continue;   // 2026-11-22: 테스트 예약은 자리 수에서 뺌
     if (onlyUnsynced && cSync >= 0 && String(data[i][cSync]) === '완료') continue;
     var d = fmtDate_(data[i][cDate]);
     if (d) out[d] = (out[d] || 0) + 1;
@@ -91,6 +92,23 @@ function pageCountsByDate_(data, onlyUnsynced) {
  * 2026-11-15: 카톡·직원이 장부에 직접 넣은 예약도 세도록 장부 줄 수(10분마다 갱신)를 함께 본다.
  *   = max(장부 줄 수 + 아직 장부에 안 들어간 신청, 신청페이지 확정 수)
  */
+function isTestName_(n) { return /테스트|test/i.test(String(n || '')); }
+
+/** 2026-11-22: 날짜별 한도 — 예약 서버 시트 '하루한도' 탭(날짜 | 한도 | 메모). 없으면 기본 dailyCap */
+var SHEET_CAP = '하루한도';
+function dayCaps_() {
+  var out = {}, v = sheet_(SHEET_CAP, ['날짜', '한도', '메모']).getDataRange().getValues();
+  for (var i = 1; i < v.length; i++) { var d = fmtDate_(v[i][0]), n = +v[i][1]; if (d && n > 0) out[d] = n; }
+  return out;
+}
+/** 신청 화면·접수 판단용 자리 수: 날짜 한도가 기본보다 작으면 그만큼 찬 것으로 (화면 규칙은 그대로 dailyCap 비교) */
+function capCountsByDate_(data) {
+  var out = countsByDate_(data), cap = rules_().CONFIG.dailyCap, caps = {};
+  try { caps = dayCaps_(); } catch (e) {}
+  Object.keys(caps).forEach(function (d) { out[d] = (out[d] || 0) + Math.max(0, cap - caps[d]); });
+  return out;
+}
+
 function countsByDate_(data) {
   if (!data) data = sheet_(SHEET_BOOK, BOOK_HEADERS).getDataRange().getValues();
   var all = pageCountsByDate_(data, false), wait = pageCountsByDate_(data, true), led = {};
@@ -122,7 +140,7 @@ function doGet(e) {
     if (p.action === 'schedule') {
       var sc = loadSchedule_();
       var nowD = new Date();
-      return json_({ ok: true, today: rules_().todayKST(nowD), hour: rules_().hourKST(nowD), closures: sc.closures, openDates: sc.openDates, counts: countsByDate_(), rulesVersion: rules_().CONFIG.version });
+      return json_({ ok: true, today: rules_().todayKST(nowD), hour: rules_().hourKST(nowD), closures: sc.closures, openDates: sc.openDates, counts: capCountsByDate_(), rulesVersion: rules_().CONFIG.version });
     }
     return json_({ ok: false, error: 'unknown_action' });
   } catch (err) {
@@ -182,7 +200,7 @@ function submit_(p) {
     }
     var sc = loadSchedule_();
     var nowD = new Date();
-    var v = R.validateApplication(p, { today: R.todayKST(nowD), now: nowD, closures: sc.closures, openDates: sc.openDates, counts: countsByDate_(data) });
+    var v = R.validateApplication(p, { today: R.todayKST(nowD), now: nowD, closures: sc.closures, openDates: sc.openDates, counts: capCountsByDate_(data) });
     if (!v.ok) return { ok: false, error: 'invalid', errors: v.errors };
     var c = v.clean;
     var ids = {};

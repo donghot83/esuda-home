@@ -283,7 +283,7 @@ function refreshLedgerCounts_() {
     for (var i = 1; i < v.length; i++) {
       var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
       if (!d || d.slice(0, 7) !== ym || d < today) continue;
-      if (!String(v[i][LEDGER_COL.name - 1] || '').trim()) continue;
+      if (!String(v[i][LEDGER_COL.name - 1] || '').trim() || isTestName_(v[i][LEDGER_COL.name - 1])) continue;   // 테스트 줄은 자리 안 차지
       if (/^\[취소/.test(String(v[i][LC.memo - 1] || ''))) continue; // 취소 표시 줄은 자리 차지 안 함
       out[d] = (out[d] || 0) + 1;
     }

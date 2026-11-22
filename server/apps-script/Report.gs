@@ -187,6 +187,7 @@ function dailyReport() {
       return '■ 오늘 처리한 취소: ' + (t.length ? t.length + '건 — ' + t.join(', ') : '없음');
     })(),
     (function () { try { return visitSummary_(chk.today).text; } catch (e) { return '■ 신청 화면 방문: 집계 실패'; } })(),
+    (function () { try { return visitWeek_(chk.today); } catch (e) { return '■ 최근 7일 신청 화면: 집계 실패'; } })(),
     '■ 오늘 들어온 신청: ' + chk.todayNew + '건 (사진 올린 신청 ' + chk.photos + '건)' + (chk.kakaoNew ? ' + 카톡 예약 연락처 등록 ' + chk.kakaoNew + '건' : ''),
     '■ 내일 ' + dayLabel_(t.date) + ' 수거: 전체 ' + t.total + '건 (신청페이지 ' + t.page + '건' + (areas ? ': ' + areas : '') + ')',
     '■ 앞으로 7일 (장부 포함): ' + next7.join(' / '),
@@ -400,6 +401,20 @@ function track_(b) {
   return { ok: true };
 }
 /** 그날 방문 단계 요약 */
+/** 2026-11-22 대표 요청: 매일 메일에 최근 7일 신청 화면 흐름(사람 수, 직원 제외) — 열기→주소→날짜→신청→완료, 완료율, 가장 많이 나간 곳 */
+function visitWeek_(today) {
+  var R = rules_(), lines = ['■ 최근 7일 신청 화면 (사람 수, 직원 제외): 열기 → 주소 → 날짜 → 신청 → 완료 (완료율)'], tot = { open: 0, done: 0 }, leaves = {};
+  for (var k = 6; k >= 0; k--) {
+    var d = R.addDays(today, -k), vs = visitSummary_(d), st = vs.steps || {};
+    tot.open += st.open || 0; tot.done += st.done || 0;
+    Object.keys(vs.leaves || {}).forEach(function (x) { leaves[x] = (leaves[x] || 0) + vs.leaves[x]; });
+    lines.push('· ' + dayLabel_(d) + ': ' + ['open', 'addr', 'date', 'submit', 'done'].map(function (s) { return st[s] || 0; }).join(' → ') + (st.open ? ' (' + Math.round(100 * (st.done || 0) / st.open) + '%)' : ''));
+  }
+  var top = Object.keys(leaves).sort(function (a, b) { return leaves[b] - leaves[a]; }).slice(0, 3).map(function (x) { return (VISIT_LABEL[x] || x) + ' 뒤 ' + leaves[x]; });
+  lines.push('· 7일 합계: 열기 ' + tot.open + ' → 완료 ' + tot.done + (tot.open ? ' (' + Math.round(100 * tot.done / tot.open) + '%)' : '') + (top.length ? ' · 많이 나간 곳: ' + top.join(', ') : ''));
+  return lines.join('\n');
+}
+
 function visitSummary_(date) {
   var sh = ss_().getSheetByName(SHEET_VISIT);
   var out = { visits: 0, steps: {}, errors: {}, leaves: {}, out: {}, dev: {}, times: {}, text: '■ 신청 화면 방문: 기록 없음' };
