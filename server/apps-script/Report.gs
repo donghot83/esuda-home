@@ -213,7 +213,10 @@ function parseCancelInput_(input) {
   var s = String(input || '').trim().toUpperCase();
   if (/^\d{4}-[A-Z0-9]{4}$/.test(s)) s = resolveRid_(s) || s;   // 2026-11-17: 짧은 번호(1118-4829)
   var m = /^ESD-\d{6}-[A-Z0-9]{4}$/.exec(s);
-  if (m) return { rid: s, date: '20' + s.slice(4, 6) + '-' + s.slice(6, 8) + '-' + s.slice(8, 10) };
+  if (m) {   // 2026-11-23: 날짜를 바꾼 예약은 번호 속 날짜와 수거일이 다름 → 예약 시트 수거일 먼저
+    var bd = ''; try { var bk = bookData_(); for (var j = 1; j < bk.data.length; j++) if (String(bk.data[j][bk.col('예약번호')]) === s) { bd = fmtDate_(bk.data[j][bk.col('수거일')]); break; } } catch (e) {}
+    return { rid: s, date: /^\d{4}-\d{2}-\d{2}$/.test(bd) ? bd : '20' + s.slice(4, 6) + '-' + s.slice(6, 8) + '-' + s.slice(8, 10) };
+  }
   var R = rules_(), today = R.todayKST(new Date());
   m = /^(?:(\d{4})[-./])?(\d{1,2})[-./](\d{1,2})\D*\s+(\d{1,3})\s*번?$/.exec(s);
   if (!m) return null;
@@ -281,6 +284,92 @@ function cancelReservation(input) {
     if (q.date) driverCacheClear_(q.date);   // 2026-11-17: 기사님 화면에 바로 취소로 보이게
     return { ok: true, msg: (f ? q.date.slice(5).replace('-', '/') + ' ' + f.no + '번 ' + f.name : rid) + ' 취소 처리\n' + msgs.join('\n') };
   } finally { lock.releaseLock(); }
+}
+
+/* ===== 예약 날짜 바꾸기 (2026-11-23 대표 요청: 정지윤 고객 11/23 → 11/24) =====
+ * 장부 줄을 새 날짜 묶음으로 옮기고(메모 끝에 '날짜변경 11/23→11/24'), 예약 시트 수거일도 바꾸고, 두 날짜 번호를 다시 매김.
+ * 당일 안내 알림톡은 바뀐 날 17:30에 나감. 고객 안내 알림톡은 없음(직접 연락). 무게가 적힌(수거한) 줄은 안 옮김.
+ */
+function parseDayInput_(input) {
+  var R = rules_(), today = R.todayKST(new Date()), s = String(input || '').trim();
+  var m = /^(?:(\d{4})[-./])?(\d{1,2})[-./](\d{1,2})\D*$/.exec(s);
+  if (!m) return '';
+  var y = m[1] || today.slice(0, 4), date = y + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  if (!m[1] && date < R.addDays(today, -31)) date = (+y + 1) + date.slice(4);
+  return R.parseYmd(date) ? date : '';
+}
+
+function moveReservation(input, newDateIn) {
+  var q = parseCancelInput_(input), nd = parseDayInput_(newDateIn), R = rules_(), today = R.todayKST(new Date());
+  if (!q) return { ok: false, msg: '예약번호(예: 1118-4829) 또는 "날짜 번호"(예: 11/23 3)로 넣어 주세요.' };
+  if (!nd) return { ok: false, msg: '새 날짜를 11/24 처럼 넣어 주세요.' };
+  if (nd < today) return { ok: false, msg: '지난 날짜로는 옮길 수 없어요.' };
+  var lock = ledgerLock_();
+  if (!lock.tryLock(15000)) return { ok: false, msg: '잠시 뒤 다시 해 주세요 (다른 작업 중)' };
+  try {
+    var f = ledgerFindEntry_(q);
+    if (!f) return { ok: false, msg: q.rid ? '장부에서 이 예약 줄을 못 찾았어요.' : '장부에 ' + q.date.slice(5).replace('-', '/') + ' ' + q.no + '번 줄이 없어요.' };
+    if (f.cancelled) return { ok: false, msg: '취소된 예약이에요 (' + f.no + '번 ' + f.name + ').' };
+    if (String(f.weight == null ? '' : f.weight).trim()) return { ok: false, msg: f.name + ' 고객님 줄에 무게가 이미 적혀 있어요 (수거 끝난 예약은 옮기지 않아요).' };
+    var od = q.date, rid = q.rid || f.rid;
+    if (od === nd) return { ok: false, msg: '이미 그 날짜 예약이에요.' };
+    var nl = ledgerOpen_(nd), nsh = nl && ledgerMonthSheet_(nl, nd);
+    if (!nsh) return { ok: false, msg: nd.slice(5).replace('-', '/') + ' 장부 시트가 없어요 (다른 해·달 장부 연결 확인).' };
+    // 1) 옛 줄 내용 읽기
+    var osh = f.sheet, oc = ledgerCols_(osh), ov = osh.getDataRange().getValues();
+    var vals = ov[f.row - 1] || [], get = function (col) { return col ? vals[col - 1] : ''; };
+    var memo = String(get(oc.memo) || '') + ' / 날짜변경 ' + od.slice(5).replace('-', '/') + '→' + nd.slice(5).replace('-', '/');
+    // 2) 옛 줄 지우기 — 그날 마지막 한 줄이었으면 뒤 빈 줄 2칸도 같이(간격 유지)
+    var ol = ledgerOpen_(od), otz = (ol && ol.getSpreadsheetTimeZone()) || 'GMT', others = 0;
+    for (var i = 1; i < ov.length; i++) if (i + 1 !== f.row && cellYmd_(ov[i][LEDGER_COL.date - 1], otz) === od && String(ov[i][LEDGER_COL.name - 1] || '').trim()) others++;
+    var blank = function (r) { return !r || r.every(function (x) { return String(x == null ? '' : x) === ''; }); };
+    var drop = 1;
+    if (!others) { while (drop <= LEDGER_GAP && f.row - 1 + drop < ov.length && blank(ov[f.row - 1 + drop])) drop++; }
+    for (var k = 0; k < drop; k++) osh.deleteRow(f.row);
+    // 3) 새 날짜 묶음에 넣기 (최종·금액·로스금액은 표준 수식)
+    var ntz = nl.getSpreadsheetTimeZone() || 'GMT', nv = nsh.getDataRange().getValues(), nc = ledgerCols_(nsh, nv);
+    var at = ledgerInsertDated_(nsh, nv, nd, ntz);
+    var put = function (col, val) { if (col && String(val == null ? '' : val) !== '') nsh.getRange(at, col).setValue(val); };
+    put(LEDGER_COL.name, get(LEDGER_COL.name)); put(LEDGER_COL.area, get(LEDGER_COL.area)); put(LEDGER_COL.addr, get(LEDGER_COL.addr));
+    put(nc.excl, get(oc.excl)); put(nc.loss, get(oc.loss)); put(nc.phone, get(oc.phone));
+    nsh.getRange(at, nc.memo).setValue(memo);
+    try { setLedgerCalc_(nsh, at); } catch (e) {}
+    // 4) 예약 시트 수거일
+    var msgs = [];
+    if (rid) {
+      var b = bookData_(), cId = b.col('예약번호'), cD = b.col('수거일');
+      for (var j = 1; j < b.data.length; j++) if (String(b.data[j][cId]) === rid) { b.sh.getRange(j + 1, cD + 1).setValue(nd); msgs.push('예약 시트: 수거일 ' + nd + ' 로 바꿈 (당일 안내 알림톡은 그날 17:30)'); break; }
+    }
+    if (!msgs.length) msgs.push('예약 시트: 연결된 예약번호가 없어 장부만 옮겼어요 (카톡 예약)');
+    bumpLedgerCount_(od, -1); bumpLedgerCount_(nd, 1);
+    try { renumberLedgerDate_(osh, od, otz); } catch (e) {}
+    try { renumberLedgerDate_(nsh, nd, ntz); } catch (e) {}
+    driverCacheClear_(od); driverCacheClear_(nd);
+    var no = nsh.getRange(at, LEDGER_COL.no).getValue();
+    return { ok: true, date: nd, row: at, no: no,
+      msg: f.name + ' 고객님 ' + R_dateLabel_(od) + ' → ' + R_dateLabel_(nd) + ' (새 번호 ' + no + '번)\n장부: 줄 옮김, 두 날짜 번호 다시 매김\n' + msgs.join('\n') + '\n\n고객님께는 카톡으로 직접 알려 주세요.' };
+  } finally { lock.releaseLock(); }
+}
+
+function menuMove_() {
+  var ui = SpreadsheetApp.getUi();
+  var p = ui.prompt('예약 날짜 바꾸기', '예약번호(예: 1118-4829) 또는 지금 날짜와 장부 번호(예: 11/23 3)를 넣어 주세요.\n번호를 모르면 메뉴 「예약 찾기」.', ui.ButtonSet.OK_CANCEL);
+  if (p.getSelectedButton() !== ui.Button.OK) return;
+  var input = p.getResponseText().trim(), q = parseCancelInput_(input);
+  if (!q) { ui.alert('예약번호 또는 "11/23 3" 처럼 넣어 주세요.'); return; }
+  var f = ledgerFindEntry_(q);
+  if (!f) { ui.alert('장부에서 그 예약을 못 찾았어요.'); return; }
+  var who = R_dateLabel_(q.date) + ' ' + f.no + '번 ' + f.name + ' (' + f.area + ')';
+  var p2 = ui.prompt('예약 날짜 바꾸기', who + '\n새 날짜를 넣어 주세요 (예: 11/24).', ui.ButtonSet.OK_CANCEL);
+  if (p2.getSelectedButton() !== ui.Button.OK) return;
+  var nd = parseDayInput_(p2.getResponseText());
+  if (!nd) { ui.alert('날짜를 11/24 처럼 넣어 주세요.'); return; }
+  var cap = rules_().CONFIG.dailyCap, cnt = 0;
+  try { cnt = capCountsByDate_()[nd] || 0; } catch (e) {}
+  var warn = cnt >= cap ? '\n⚠️ 그날은 이미 자리가 다 찼어요. 그래도 옮길 수 있어요.' : '';
+  if (ui.alert('예약 날짜 바꾸기', who + '\n→ ' + R_dateLabel_(nd) + ' 로 옮길까요?' + warn, ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  ui.alert(moveReservation(input, nd).msg);
+  try { refreshDashboard(); } catch (e) {}
 }
 
 /** 장부 시트에 '메모가 [취소 로 시작하면 빨간 취소선' 조건부 서식 (한 번만 추가) */

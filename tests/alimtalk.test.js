@@ -212,3 +212,15 @@ test('2026-11-17 기사님: 사진 찍고 완료 → 완료 먼저(알림톡 보
   assert.strictEqual(e.fetches.length, b2 + 1);
   assert.strictEqual(e.ctx.sendPendingPickups_(new Date(Date.parse('2026-11-16T03:20:00Z'))), 0);  // 두 번은 안 보냄
 });
+
+test('2026-11-23 당일 안내 중복은 그날만: 어제 보낸 기록이 있어도(날짜 바꾼 예약) 오늘 다시 보냄', () => {
+  const e = createEnv({ now: '2026-11-17T08:30:00Z', ledger: { '11월 매입금액': [HEAD] }, props: Object.assign({}, READY, { TPL_SAMEDAY: 'KA01TPSAME' }) });
+  const e0 = createEnv({ now: '2026-11-15T03:00:00Z', ledger: { '11월 매입금액': [HEAD] }, props: {} });
+  const a = e0.post(sub({ date: '2026-11-17', name: '바뀐고객', address: { sido: '서울', sigungu: '강남구', bname: '역삼동', roadAddress: '서울 강남구 가상로 1', zonecode: '00000' } }));
+  assert.ok(a.ok, JSON.stringify(a));
+  e.ctx.bookData_(); e.sheet('예약').rows.splice(0, e.sheet('예약').rows.length, ...e0.sheet('예약').rows);
+  e.ctx.alimLog_('sameday', a.reservationId, '01000000000', '성공');
+  e.sheet('알림톡기록').rows[1][0] = '2026-11-16 17:30:01';
+  assert.strictEqual(e.ctx.sendSameDayNotices().sent, 1);
+  assert.strictEqual(e.ctx.sendSameDayNotices().sent, 0);
+});

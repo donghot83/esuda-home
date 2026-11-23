@@ -182,17 +182,31 @@ function ledgerAppend_(c, rid) {
   var sh = ledgerMonthSheet_(lss, c.date);
   if (!sh) return { ok: false, reason: 'no_month_sheet' };
   var v = sh.getDataRange().getValues(), LC = ledgerCols_(sh, v);
-  var ym = c.date.slice(0, 7);
+  for (var i = 1; i < v.length; i++) if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) return { ok: true, duplicate: true }; // 이미 들어감
+  var at = ledgerInsertDated_(sh, v, c.date, tz);
+  sh.getRange(at, LEDGER_COL.name).setValue(c.name);
+  sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
+  sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
+  sh.getRange(at, LC.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
+  try { setLedgerCalc_(sh, at); } catch (e) { logError_('장부 수식', e); }
+  driverCacheClear_(c.date);
+  try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
+  bumpLedgerCount_(c.date, 1);
+  return { ok: true, row: at };
+}
+
+/** 그 날짜 묶음 끝(없으면 앞뒤 날짜 사이, 빈 줄 2칸 간격)에 빈 줄을 넣고 날짜를 적는다 → 새 줄 번호(1부터). ledgerAppend_·날짜 바꾸기 같이 씀 */
+function ledgerInsertDated_(sh, v, date, tz) {
+  var LC = ledgerCols_(sh, v), ym = date.slice(0, 7);
   var last = -1, lastDate = '', firstAfter = -1;
   for (var i = 1; i < v.length; i++) {
-    if (String(v[i][LC.memo - 1] || '').indexOf(rid) >= 0) return { ok: true, duplicate: true }; // 이미 들어감
     var d = cellYmd_(v[i][LEDGER_COL.date - 1], tz);
     if (!d || d.slice(0, 7) !== ym) continue;            // 다른 달(아래쪽 월별 요약표 등)은 건너뜀
-    if (d <= c.date) { last = i; lastDate = d; }
+    if (d <= date) { last = i; lastDate = d; }
     else if (firstAfter < 0) firstAfter = i;
   }
   var at; // 새 줄을 넣을 1-based 행 번호
-  if (last >= 0 && lastDate === c.date) {            // 같은 날짜 묶음 끝에 붙이기
+  if (last >= 0 && lastDate === date) {              // 같은 날짜 묶음 끝에 붙이기
     sh.insertRowsAfter(last + 1, 1); at = last + 2;
   } else if (last >= 0) {                            // 앞 날짜 묶음 뒤: 빈 줄 2칸 띄우고 (뒤쪽 간격은 원래대로 유지)
     sh.insertRowsAfter(last + 1, LEDGER_GAP + 1); at = last + 2 + LEDGER_GAP;
@@ -206,17 +220,9 @@ function ledgerAppend_(c, rid) {
     try { sh.getRange(last + 1, 1, 1, LC.memo).copyTo(sh.getRange(at, 1, 1, LC.memo), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false); } catch (e) {}
   }
   var dc = sh.getRange(at, LEDGER_COL.date);
-  dc.setValue(c.date); // 'YYYY-MM-DD' 글자 → 시트가 자기 시간대로 그날 날짜로 바꿈(시간대 차이로 하루 밀리지 않음)
+  dc.setValue(date); // 'YYYY-MM-DD' 글자 → 시트가 자기 시간대로 그날 날짜로 바꿈(시간대 차이로 하루 밀리지 않음)
   if (fmt) { try { dc.setNumberFormat(fmt); } catch (e) {} }
-  sh.getRange(at, LEDGER_COL.name).setValue(c.name);
-  sh.getRange(at, LEDGER_COL.area).setValue(ledgerArea_(c));
-  sh.getRange(at, LEDGER_COL.addr).setValue(ledgerAddress_(c));
-  sh.getRange(at, LC.memo).setValue(rid + ' 신청페이지 / ' + c.amount + (c.payNote ? ' / ' + c.payNote : '') + (c.memo ? ' / ' + c.memo : ''));
-  try { setLedgerCalc_(sh, at); } catch (e) { logError_('장부 수식', e); }
-  driverCacheClear_(c.date);
-  try { renumberLedgerDate_(sh, c.date, tz); } catch (e) {}
-  bumpLedgerCount_(c.date, 1);
-  return { ok: true, row: at };
+  return at;
 }
 
 /**

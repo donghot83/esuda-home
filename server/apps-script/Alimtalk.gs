@@ -50,6 +50,15 @@ function alimSent_(kind, rid) {
   return sh.getDataRange().getValues().some(function (r) { return String(r[1]) === ALIM_KINDS[kind].label && String(r[2]) === rid && /^성공/.test(String(r[4])); });
 }
 
+function alimSentOn_(kind, rid, ymd) {
+  var sh = ss_().getSheetByName(SHEET_ALIM);
+  if (!sh) return false;
+  return sh.getDataRange().getValues().some(function (r) {
+    var at = r[0] instanceof Date || (r[0] && typeof r[0].getTime === 'function') ? Utilities.formatDate(r[0], 'Asia/Seoul', 'yyyy-MM-dd') : String(r[0]).slice(0, 10);
+    return at === ymd && String(r[1]) === ALIM_KINDS[kind].label && String(r[2]) === rid && /^성공/.test(String(r[4]));
+  });
+}
+
 function alimLog_(kind, rid, to, result) {
   try { sheet_(SHEET_ALIM, ['시각', '종류', '예약번호', '받는번호', '결과']).appendRow([Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'), ALIM_KINDS[kind].label, rid, '****' + String(to).slice(-4), String(result).slice(0, 200)]); } catch (e) {}
 }
@@ -68,7 +77,8 @@ function sendAlimtalk_(kind, rid, phone, vars) {
   var tpl = c.tpl(kind);
   if (!c.key || !c.secret || !c.pfId || !tpl) return { ok: false, skipped: 'not_ready' };
   if (!/^01\d{8,9}$/.test(to)) return { ok: false, skipped: 'no_phone' };
-  if (alimSent_(kind, rid)) return { ok: true, skipped: 'already' };
+  // 2026-11-23: 당일 안내는 '그날' 보낸 것만 중복으로 봄 — 날짜를 바꾼 예약은 바뀐 날에도 다시 나감
+  if (kind === 'sameday' ? alimSentOn_(kind, rid, rules_().todayKST(new Date())) : alimSent_(kind, rid)) return { ok: true, skipped: 'already' };
   var msg = { to: to, kakaoOptions: { pfId: c.pfId, templateId: tpl, variables: vars, disableSms: !c.from } };
   if (c.from) msg.from = String(c.from).replace(/[^0-9]/g, '');
   try {

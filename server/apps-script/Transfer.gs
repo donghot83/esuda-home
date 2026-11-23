@@ -251,6 +251,7 @@ function onOpen() {
       .addItem('장부에 무상제외 칸 추가 (한 번만)', 'menuAddExclColumns_')
       .addItem('장부에 연락처 칸 추가 (카톡 예약 알림톡, 한 번만)', 'menuSetupKakaoPhone_')
       .addItem('예약 취소 (예약번호 또는 날짜 번호)', 'menuCancel_')
+      .addItem('예약 날짜 바꾸기 (예약번호 또는 날짜 번호)', 'menuMove_')
       .addItem('동선 짜기 (번호 확정)', 'menuRoute_')
       .addItem('현황판 새로 고침', 'menuDashboard_')
       .addItem('점검 메일 지금 보내기', 'menuReportNow_')
