@@ -20,6 +20,11 @@ function bookData_() {
   return { sh: sh, data: data, hdr: hdr, col: function (h) { return hdr.indexOf(h); } };
 }
 
+/** 메일에 보일 오류 한 줄 — 숫자 4자리 이상(연락처·계좌·주소 번호)과 긴 문서 ID 는 가림 */
+function errText_(where, msg) {
+  return String(where || '').slice(0, 30) + ' - ' + String(msg || '').replace(/[A-Za-z0-9_-]{20,}/g, '(ID)').replace(/\d[\d\s-]{2,}\d/g, '***').slice(0, 60);
+}
+
 /** 점검 — {issues:[문장], ok:[문장], pending:[{rid,date,why}], tomorrow:{date, n, byArea}} */
 function runChecks_() {
   var R = rules_(), now = new Date(), today = R.todayKST(now);
@@ -79,16 +84,21 @@ function runChecks_() {
       if (!seen['y' + y]) { seen['y' + y] = 1; issues.push(y + '년 예약도 받기 시작했어요(달력 ' + R.CONFIG.horizonDays + '일). ' + y + '년 장부를 만들면 연결해야 해요 — 그때까지 ' + y + '년 예약은 장부 대신 예약 시트에만 있고, 이 메일로 계속 알려 드려요.'); }
       return;
     }
-    try { var l = ledgerOpen_(d1); if (l && !ledgerMonthSheet_(l, d1)) issues.push('장부에 "' + m + '월 매입금액" 시트가 아직 없어요. 만들어 두면 ' + m + '월 예약이 자동으로 들어가요.'); } catch (e) {}
+    try { var l = ledgerOpen_(d1); if (l && !ledgerMonthSheet_(l, d1)) issues.push('장부에 "' + ledgerNewSheetName_(d1) + '" 시트가 아직 없어요. 이 이름으로 만들어 두면 ' + m + '월 예약이 자동으로 들어가요.'); } catch (e) {}
   });
   // 서버 오류(최근 24시간)
-  var errs = 0;
+  // 2026-11-24: 시트가 시각을 날짜로 바꿔 저장 → 글자 비교가 늘 참이라 옛 오류까지 매일 셌음. 시각 값으로 비교
+  var errs = 0, errList = [];
   try {
     var ev = ss_().getSheetByName('오류');
     if (ev) { var cut = Utilities.formatDate(new Date(now.getTime() - 864e5), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-      ev.getDataRange().getValues().slice(1).forEach(function (x) { if (String(x[0]) >= cut) errs++; }); }
+      ev.getDataRange().getValues().slice(1).forEach(function (x) {
+        var at = x[0] && typeof x[0].getTime === 'function' ? Utilities.formatDate(x[0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(x[0] || '');
+        if (!at || at < cut) return;
+        errs++; errList.push(at.slice(5, 16) + ' ' + errText_(x[1], x[2]));
+      }); }
   } catch (e) {}
-  if (errs) issues.push('최근 24시간 서버 오류 ' + errs + '건 (예약 서버 시트 "오류" 탭)'); else ok.push('서버 오류 없음');
+  if (errs) issues.push('최근 24시간 서버 오류 ' + errs + '건 (예약 서버 시트 "오류" 탭): ' + errList.slice(-3).join(' / ')); else ok.push('서버 오류 없음');
   // 자동 반영 장치가 살아 있나
   var trig = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'syncLedgerPending'; });
   if (!trig) issues.push('10분 자동 반영 장치가 꺼져 있어요');

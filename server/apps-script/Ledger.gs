@@ -132,6 +132,13 @@ function ledgerMonthSheet_(ss, dateStr) {
   return null;
 }
 
+/** 그 달 시트를 새로 만들 때 쓸 이름 (ledgerMonthSheet_ 가 찾는 이름과 같게) */
+function ledgerNewSheetName_(dateStr) {
+  var m = +dateStr.slice(5, 7), y = dateStr.slice(0, 4), P = PropertiesService.getScriptProperties();
+  var shared = y !== (P.getProperty('LEDGER_YEAR') || '2026') && P.getProperty('LEDGER_ID_' + y) === P.getProperty('LEDGER_ID');
+  return (shared ? y.slice(2) + '년 ' : '') + m + '월 매입금액';
+}
+
 /** 장부 '지역구' 칸: 서울은 구, 경기는 시 (고양시 덕양구 → '고양시', 김포시 → '김포시') */
 function ledgerArea_(c) {
   var sg = String(c.sigungu || '').trim();

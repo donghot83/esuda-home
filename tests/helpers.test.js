@@ -206,3 +206,27 @@ test('걸린 시간 기록: 확정·사진 올리기 시간을 사진 장수별 
   const body = env.mails[env.mails.length - 1].body;
   assert.match(body, /걸린 시간\(평균, 최대\): 사진 올리기 2\/2장 9\.5초·9\.5초\(1건\), 확정 사진0장 3\.1초·3\.4초\(2건\)/);
 });
+
+test('2026-11-24 점검: 서버 오류는 최근 24시간만(날짜값·글자 모두), 내용은 숫자 가리고 표시', () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  const sh = env.ctx.sheet_('오류', ['시각', '위치', '내용']);
+  sh.appendRow([new Date('2026-11-10T01:00:00Z'), '현황판', '옛 오류']);
+  sh.appendRow(['2026-11-12 09:00:00', '현황판', '옛 글자 오류']);
+  const line = () => env.ctx.runChecks_().issues.find(x => /서버 오류/.test(x));
+  assert.strictEqual(line(), undefined);
+  assert.ok(env.ctx.runChecks_().ok.includes('서버 오류 없음'));
+  sh.appendRow([new Date('2026-11-14T02:00:00Z'), '장부 입력', '010-1234-5678 실패']);
+  sh.appendRow(['2026-11-15 09:00:00', '현황판', '동시 호출']);
+  assert.match(line(), /서버 오류 2건/);
+  assert.match(line(), /11-14 11:00 장부 입력/);
+  assert.ok(!/1234|5678/.test(line()), line());
+});
+
+test('2026-11-24 새 시트 이름 안내: 26년 파일을 같이 쓰는 27년은 "27년 N월 매입금액", 그대로 만들면 찾아짐', () => {
+  const env = createEnv({ now: NOW, ledger: ledger() });
+  assert.strictEqual(env.ctx.ledgerNewSheetName_('2026-12-01'), '12월 매입금액');
+  env.props.LEDGER_ID_2027 = env.props.LEDGER_ID;
+  assert.strictEqual(env.ctx.ledgerNewSheetName_('2027-02-01'), '27년 2월 매입금액');
+  env.props.LEDGER_ID_2027 = 'OTHER';
+  assert.strictEqual(env.ctx.ledgerNewSheetName_('2027-02-01'), '2월 매입금액');
+});
