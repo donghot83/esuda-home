@@ -397,6 +397,9 @@
     $('doneId').textContent = R.shortId(r.reservationId);
     $('doneDate').textContent = (dt.getUTCMonth() + 1) + '월 ' + dt.getUTCDate() + '일 (' + WD[dt.getUTCDay()] + ')';
     $('doneAddr').textContent = (state.address ? state.address.roadAddress : '') + ' ' + $('addrDetail').value;
+    // 2026-11-25: 수거 시작 시간 지역별 (서울 저녁 10시, 일산·김포 저녁 7시)
+    var st = (state.address && /서울/.test(state.address.sido || '')) ? '저녁 10시' : '저녁 7시';
+    if ($('doneTime')) $('doneTime').innerHTML = '예약일 <b>' + st + ' 전까지</b> 물건을 문 앞에 두세요. 수거는 <b>' + st + '부터 다음 날 새벽 4시 사이</b>에 해요.';
     var later = !(up && up.pending) && (state.photoMode === R.PHOTO_MODES[1] || (up && up.sent < up.total) || (state.photoMode === R.PHOTO_MODES[0] && !photos.length));
     var dp = $('donePhoto');
     if (up && up.pending) { dp.hidden = false; dp.textContent = '📷 사진 ' + up.sent + '장을 함께 접수하는 중이에요.'; }

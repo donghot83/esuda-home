@@ -214,3 +214,4 @@ br.m{display:none}@media(max-width:600px){br.m{display:inline}}
 .real figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden}
 .real img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover}
 .real figcaption{padding:12px 16px;font-size:14px;color:var(--sub)}
+.area span.tm{display:block;margin-top:8px;color:var(--green);font-size:14px;font-weight:700;white-space:nowrap}

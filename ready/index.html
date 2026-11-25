@@ -48,7 +48,7 @@ a.btn{display:flex;align-items:center;justify-content:center;height:50px;margin-
   }
   if (!OKID.test(id) || !C.apiUrl) { show(false, '예약번호를 확인하지 못했어요', '알림톡의 [준비 완료] 버튼으로 다시 들어와 주세요.<br>계속 안 되면 카카오채널로 "준비 완료"라고 보내 주세요.'); return; }
   // 2026-11-17 속도: 완료 화면을 바로 보여 주고 서버 기록은 뒤에서 (예약을 못 찾거나 취소된 경우만 화면을 바꿈)
-  show(true, '준비 완료를 전달했어요', '오늘 저녁 7시 ~ 내일 새벽 4시 사이에 순서대로 방문해요.<br>감사합니다!');
+  show(true, '준비 완료를 전달했어요', '오늘 밤 순서대로 방문해요.<br>서울은 저녁 10시, 일산·김포는 저녁 7시부터 내일 새벽 4시 사이예요.<br>감사합니다!');
   var done = false, body = JSON.stringify({ action: 'ready', reservationId: id });
   window.addEventListener('pagehide', function () {   // 응답 전에 창을 닫아도 기록되게
     if (!done && navigator.sendBeacon) { try { navigator.sendBeacon(C.apiUrl, new Blob([body], { type: 'text/plain;charset=utf-8' })); done = true; } catch (e) {} }
