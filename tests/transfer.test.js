@@ -40,8 +40,8 @@ test('무게가 적힌 예약만 이체 파일에: 은행코드·계좌(숫자�
   assert.match(out.name, /^\[신한 다건이체\] /);
   const up = out.getSheetByName('업로드용').rows;
   assert.deepEqual(JSON.parse(JSON.stringify(up[0])), ['입금은행', '입금계좌', '고객관리성명', '입금액', '출금통장표시', '입금통장표시']);
-  assert.deepEqual(JSON.parse(JSON.stringify(up[1])), ['088', '0110123456789', '가상갑', '10000', '가상갑', '이수다매입']);
-  assert.deepEqual(JSON.parse(JSON.stringify(up[2])), ['090', '3333012345678', '가상을', '7250', '가상을', '이수다매입']);
+  assert.deepEqual(JSON.parse(JSON.stringify(up[1])), ['088', '0110123456789', '가상갑', '10000', '가상갑', '헌옷수거이수다']);
+  assert.deepEqual(JSON.parse(JSON.stringify(up[2])), ['090', '3333012345678', '가상을', '7250', '가상을', '헌옷수거이수다']);
   const book = env.sheet('예약').rows, h = book[0];
   const st = n => book.find(x => x[h.indexOf('이름')] === n)[h.indexOf('지급상태')];
   assert.strictEqual(st('가상갑'), '이체파일생성'); assert.strictEqual(st('가상병'), '무상수거'); assert.ok(!st('가상정'));
