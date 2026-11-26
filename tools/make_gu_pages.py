@@ -191,3 +191,7 @@ urls=['','gimpo/','ilsan/','seoul/']+[f'seoul/{g[0]}/' for g in GU]
 sm='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join(f'  <url><loc>{BASE}{u}</loc><lastmod>2026-11-12</lastmod></url>\n' for u in urls)+'</urlset>\n'
 open(f'{R}/sitemap.xml','w').write(sm)
 print(len(GU),'pages')
+
+# 지역 페이지를 다시 만들면 실제 사례 카드(tools/cases)도 다시 넣는다
+import subprocess, sys
+subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cases", "render.py")], check=True)
