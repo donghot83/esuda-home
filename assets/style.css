@@ -221,3 +221,4 @@ br.m{display:none}@media(max-width:600px){br.m{display:inline}}
 .case h3 small{font-weight:600;color:var(--green);margin-left:6px;font-size:14px}
 .case p{margin:0;font-size:15px;line-height:1.7;color:var(--sub)}
 .cases-note{margin-top:14px;font-size:13px;color:var(--sub)}
+.case .meta{display:block;margin-top:10px;font-size:13px;color:var(--green);font-weight:700}
